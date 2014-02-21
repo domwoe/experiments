@@ -49,7 +49,7 @@ if(!file.exists(cacheFile))
 	#ddplyCols <- c("loc_id", "unittypename")
 	ddplyCols <- c("sens_id")
 	dbResult <- ddply(dbResult, ddplyCols, function(df) {
-		tmp <- df[with(df, order(timestamp)), setdiff(colnames(dbResult),ddplyCols)]
+		tmp <- df[with(df, order(timestamp)), setdiff(colnames(dbResult),ddplyCols)] #sort and select columns
 		if(nrow(tmp) > 0) {
 			tmp$timestamp2 <- tmp$timestamp[c(2:length(tmp$timestamp),length(tmp$timestamp))]
 		}
