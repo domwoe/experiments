@@ -1,23 +1,82 @@
 #!/usr/bin/env Rscript
 
+plotSensorHistograms <- function(ldf, columnsToPlot) {
+	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) ))
+	#print(df[df$presence!=1 & df$presence!=0, ])
+	stopifnot(all(df$presence==1 | df$presence==0))
+	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
+	mlt$presence <- factor(mlt$presence)
+	#print(head(mlt))
+	filename <- paste("hist_sensorData.pdf", sep="")
+	pdf(file=filename, width=6, height=7)
+	print(filename)
+	lapply(dlply(mlt, .(variable)), function (mltp) {
+		var <- unique(mltp$variable)
+		plt <- ggplot(data=mltp) + geom_histogram(aes(fill=presence, x=value, y=..count../sum(..count..)), position="dodge") + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var)
+		print(plt)
+	})
+	dev.off()
+}
+
 plotHistOccupancy <- function(df) {	
 	presenceData <- df[df$unittypename == "presence" & df$reading == 1, ]
 	#print(head(presenceData))
 	presenceData$durationInSec <- (presenceData$timestamp2 - presenceData$timestamp) %/% 1000
+	presenceData$durationInHours <- presenceData$durationInSec / 3600
 	#presenceData$durationInSec <- as.POSIXct(presenceData$durationInSec, origin="1970-01-01")
 	#print(head(presenceData))
 	num_bins <- 17
-	hls <- lapply(dlply(presenceData, .(loc_id)), function(x, b) {
-	  rng <- max(x$durationInSec)
+	hls <- lapply(dlply(presenceData, .(loc_id)), function(x) {
+	  rng <- max(x$durationInHours)
 	  bwidth <- rng/num_bins
-	  geom_histogram(data = x, binwidth=bwidth)
+	  geom_histogram(data = x, aes(y=..count../sum(..count..)), binwidth=bwidth)
 	})
 	filename <- paste("hist_occupancy.pdf", sep="")
 	print(filename)
 	pdf(file=filename, width=7, height=9)
-	plt <- ggplot(data=presenceData, aes(x=durationInSec)) + hls + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() #+ scale_x_datetime(labels = date_format("%H:%M"))
+	plt <- ggplot(data=presenceData, aes(x=durationInHours)) + hls + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() +labs(x="Dwell time [h]", y="Fraction of occupancy times", title="Occupancy histogram") #+ scale_x_datetime(labels = date_format("%H:%M"))
 
 	print(plt)
+	dev.off()
+}
+
+plotSensorDataTable <- function(df, nm, columnsToPlot) {
+	filename <- paste("locId_", nm, ".pdf", sep="")
+	print(filename)
+	pdf(file=filename, width=8, height=4)
+	mlt <- melt(df, id.vars=c("timestamp"), measure.vars=columnsToPlot)
+	mlt$time <- as.POSIXct(mlt$timestamp %/% 1000, origin="1970-01-01")
+	mlt$timestamp <- NULL
+
+	startTimestamp <- min(mlt$time)
+	stopTimestamp <- max(mlt$time)
+
+	startDateDay <- as.POSIXlt(startTimestamp, origin="1970-01-01")
+	startDateDay$mday <- startDateDay$mday -1
+	startDateDay$hour = 22
+
+	endDateDay <- startDateDay
+	endDateDay$mday <- endDateDay$mday + 1
+	endDateDay$hour <- endDateDay$hour + 4
+
+	while(stopTimestamp > startDateDay)
+	{
+		plt <- ggplot(data = mlt, mapping=aes(x=time, y=value, color=variable))
+		plt <- plt + geom_step()
+		plt <- plt + facet_grid(variable~.,scales="free_y")
+		plt <- plt + scale_x_datetime(labels = date_format("%d/%m %H:%M"), expand = c(0,0), limits = c(as.POSIXct(startDateDay), as.POSIXct(endDateDay)))
+		plt <- plt + theme_bw()
+		plt <- plt + theme(legend.position = "top", legend.title=element_blank(), panel.margin = unit(0.3, "cm"), strip.text.y = element_text(size = 8), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank())
+
+		plotDate <- startDateDay
+		plotDate$hour <- plotDate$hour + 6
+		plt <- plt + labs(title = paste(nm, ":", format(plotDate, "%Y-%m-%d")), x = "", y = "Value")
+		print(plt)
+
+		startDateDay$mday <- startDateDay$mday + 1
+		endDateDay$mday <- endDateDay$mday + 1
+	}
+
 	dev.off()
 }
 
