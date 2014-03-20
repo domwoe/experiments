@@ -12,7 +12,7 @@ plotSensorHistograms <- function(ldf, columnsToPlot) {
 	print(filename)
 	lapply(dlply(mlt, .(variable)), function (mltp) {
 		var <- unique(mltp$variable)
-		plt <- ggplot(data=mltp) + geom_histogram(aes(fill=presence, x=value, y=..count../sum(..count..)), position="dodge") + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var)
+		plt <- ggplot(data=mltp) + geom_histogram(aes(fill=presence, x=value, y=..count..), position="dodge", color="black", size=0.2) + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
 		print(plt)
 	})
 	dev.off()
@@ -21,7 +21,7 @@ plotSensorHistograms <- function(ldf, columnsToPlot) {
 plotHistOccupancy <- function(df) {	
 	presenceData <- df[df$unittypename == "presence" & df$reading == 1, ]
 	#print(head(presenceData))
-	presenceData$durationInSec <- (presenceData$timestamp2 - presenceData$timestamp) %/% 1000
+	presenceData$durationInSec <- (presenceData$timestamp2 - presenceData$timestamp)
 	presenceData$durationInHours <- presenceData$durationInSec / 3600
 	#presenceData$durationInSec <- as.POSIXct(presenceData$durationInSec, origin="1970-01-01")
 	#print(head(presenceData))
@@ -34,7 +34,7 @@ plotHistOccupancy <- function(df) {
 	filename <- paste("hist_occupancy.pdf", sep="")
 	print(filename)
 	pdf(file=filename, width=7, height=9)
-	plt <- ggplot(data=presenceData, aes(x=durationInHours)) + hls + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() +labs(x="Dwell time [h]", y="Fraction of occupancy times", title="Occupancy histogram") #+ scale_x_datetime(labels = date_format("%H:%M"))
+	plt <- ggplot(data=presenceData, aes(x=durationInHours)) + hls + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() +labs(x="duration of occupied time interval [h]", y="Fraction of occupancy times", title="Occupancy histogram") #+ scale_x_datetime(labels = date_format("%H:%M"))
 
 	print(plt)
 	dev.off()
@@ -45,7 +45,7 @@ plotSensorDataTable <- function(df, nm, columnsToPlot) {
 	print(filename)
 	pdf(file=filename, width=8, height=4)
 	mlt <- melt(df, id.vars=c("timestamp"), measure.vars=columnsToPlot)
-	mlt$time <- as.POSIXct(mlt$timestamp %/% 1000, origin="1970-01-01")
+	mlt$time <- as.POSIXct(mlt$timestamp, origin="1970-01-01")
 	mlt$timestamp <- NULL
 
 	startTimestamp <- min(mlt$time)
@@ -62,7 +62,7 @@ plotSensorDataTable <- function(df, nm, columnsToPlot) {
 	while(stopTimestamp > startDateDay)
 	{
 		plt <- ggplot(data = mlt, mapping=aes(x=time, y=value, color=variable))
-		plt <- plt + geom_step()
+		plt <- plt + geom_step(size=0.2)
 		plt <- plt + facet_grid(variable~.,scales="free_y")
 		plt <- plt + scale_x_datetime(labels = date_format("%d/%m %H:%M"), expand = c(0,0), limits = c(as.POSIXct(startDateDay), as.POSIXct(endDateDay)))
 		plt <- plt + theme_bw()

@@ -2,10 +2,11 @@
 
 # install all required packages and load them
 options("repos"="http://cran.us.r-project.org")
-list.of.packages <- c("ggplot2", "reshape2", "gridExtra", "grid", "plyr", "RPostgreSQL", "scales")
+list.of.packages <- c("ggplot2", "reshape2", "gridExtra", "grid", "plyr", "RPostgreSQL", "scales", "methods", "pspline", "RHmm", "mhsmm")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
-lapply(list.of.packages, require, character.only=T)
+retVal <- lapply(list.of.packages, require, character.only=T)
+stopifnot(all(as.logical(retVal)))
 
 Rfiles <- dir(path = ".", pattern = "^init_[[:alnum:]]+\\.r$", include.dirs=F)
 RfilesSelfRemoved <- Rfiles[!(Rfiles %in% c("init_init.r"))]

@@ -5,9 +5,16 @@ firstDerivSecondOrderAccCentral <- function(vec) {
 	l <- length(vec)
 	stopifnot(l >= 3)
 	v <- -0.5*vec[c(1,1:(l-2),(l-2))] +  0.5*vec[c(3,3:l,l)]
-	v <- log(v)
+	#v <- log(-v)
 	stopifnot(length(v) == l)
 	return(v)
+}
+
+firstDerivSpline <- function(timestamps, vec) {
+	#splineF <- sm.spline(timestamps, vec)
+	splineF <- smooth.Pspline(x=timestamps, y=vec, norder=3, method=3) # we need order 3 according to descr
+	newV <- predict(splineF, xarg=timestamps, nderiv = 1)
+	return(newV)
 }
 
 interpolateAccordingToSensorID <- function(dbResult, startT, stopT, deltaT) {
@@ -99,6 +106,8 @@ if(!file.exists(cacheFile))
 	stopifnot(all(presenceVal==1 | presenceVal==0))
 	cat("check passed\n")
 
+	dbResult$timestamp <- dbResult$timestamp %/% 1000 # convert to seconds
+
 	# we add another column (timestamp2) to the data frame. this allows us to plot rectangles/intervals later on
 	ddplyCols <- c("sens_id")
 	dbResult <- ddply(dbResult, ddplyCols, function(df) {
@@ -119,8 +128,8 @@ if(!file.exists(cacheFile))
 	dbResult <- read.table(file=cacheFile, header=TRUE, sep="\t")
 }
 # transform timestamps to actual times / add one column each
-dbResult$time1 <- as.POSIXct(dbResult$timestamp %/% 1000, origin="1970-01-01")
-dbResult$time2 <- as.POSIXct(dbResult$timestamp2 %/% 1000, origin="1970-01-01")
+dbResult$time1 <- as.POSIXct(dbResult$timestamp, origin="1970-01-01")
+dbResult$time2 <- as.POSIXct(dbResult$timestamp2, origin="1970-01-01")
 
 
 
