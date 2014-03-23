@@ -6,7 +6,8 @@ list.of.packages <- c("ggplot2", "reshape2", "gridExtra", "grid", "plyr", "RPost
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 retVal <- lapply(list.of.packages, require, character.only=T)
-stopifnot(all(as.logical(retVal)))
+allPackagesLoaded <- all(as.logical(retVal))
+stopifnot(allPackagesLoaded == TRUE)
 
 Rfiles <- dir(path = ".", pattern = "^init_[[:alnum:]]+\\.r$", include.dirs=F)
 RfilesSelfRemoved <- Rfiles[!(Rfiles %in% c("init_init.r"))]

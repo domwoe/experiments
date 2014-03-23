@@ -1,9 +1,9 @@
 #!/usr/bin/env Rscript
 
-.Model <- setClass("Model", representation(sensorData="data.frame"))
+.Model <- setClass("Model", representation(sensorData="data.frame", sensors="character"))
 
-Model <- function(sensorData=data.frame(), ...) {
-    new("Model", sensorData=sensorData, ...)
+Model <- function(sensorData=data.frame(), sensors=character(), ...) {
+    new("Model", sensorData=sensorData, sensors=sensors, ...)
 }
 
 setGeneric("predictFromModel", function(object, newSensorData) {
@@ -19,8 +19,7 @@ setMethod("predictFromModel", signature("Model", "data.frame"), function(object,
 
 .SimpleMarkov <- setClass("SimpleMarkov", contains="Model", representation(steps="numeric", model="ANY"))
 
-SimpleMarkov  <- function(sensorData=data.frame(), ...) {
-	consideredColumns <- c("co2", "co2deriv", "humidity")
+SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	l <- length(sensorData$presence)
 	digr <- data.frame(first=sensorData$presence,second=sensorData$presence[c(2:l,l)])
 	pMat <- as.matrix(table(digr))
@@ -29,7 +28,11 @@ SimpleMarkov  <- function(sensorData=data.frame(), ...) {
 	pMat <- pMat/rowSums(pMat)
 	initV <- c(1/2, 1/2)
 	meanEstimate <- dlply(sensorData, .(presence), function(df) {
-		cM <- colMeans(df[, consideredColumns])
+		#print(colnames(df))
+		#print(sensors)
+		#print(colnames(df) %in% sensors)
+		#print(head(df[, colnames(df) %in% sensors]))
+		cM <- colMeans(df[, colnames(df) %in% sensors])
 		vec <- as.vector(cM)
 		names(vec) <- NULL
 		return(vec)
@@ -38,7 +41,8 @@ SimpleMarkov  <- function(sensorData=data.frame(), ...) {
 	attr(meanEstimate,"split_type") <- NULL
 	attr(meanEstimate,"split_labels") <- NULL
 	sigmaEstimate <- dlply(sensorData, .(presence), function(df) {
-		v <- diag(var(df[, consideredColumns])) # extract variances from co-variance matrix
+		#print(colnames(df))
+		v <- diag(var(df[, colnames(df) %in% sensors])) # extract variances from co-variance matrix
 		v <- sqrt(v) # compute standard devitaion from variance
 		d <- diag(x=v) # create diagonal matrix
 		colnames(d) <- NULL #names(v)
@@ -53,7 +57,7 @@ SimpleMarkov  <- function(sensorData=data.frame(), ...) {
 	#print(sigmaEstimate)
 	#print(b)
 	hmmmodel <- hmmspec(init=initV, trans=pMat, parms.emission=b, dens.emission=dmvnorm.hsmm)
-	new("SimpleMarkov", Model(sensorData), model=hmmmodel, ...)
+	new("SimpleMarkov", Model(sensorData, sensors), model=hmmmodel, ...)
 }
 
 setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(object, newSensorData) {
@@ -63,7 +67,7 @@ setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(
 	#print(names(train))
 	#print(train)
 	#stop()
-	newDat <- newSensorData[, c("co2", "co2deriv", "humidity")]
+	newDat <- newSensorData[, colnames(newSensorData) %in% object@sensors]
 	newDat <- as.matrix(newDat)
 	# we have to create a list first before handing data to predict to avoid warnings and other stuff
 	prediction <- predict.hmmspec(object@model,newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")

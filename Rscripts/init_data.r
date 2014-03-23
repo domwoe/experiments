@@ -17,23 +17,59 @@ firstDerivSpline <- function(timestamps, vec) {
 	return(newV)
 }
 
-interpolateAccordingToSensorID <- function(dbResult, startT, stopT, deltaT) {
-	interpolatedValues <- ddply(dbResult, c("sens_id", "unittypename"), function(df) {
-		timestampVec <- seq(from = startT, to = stopT, by = deltaT) #does not exceed stopTimestamp
-		apprList <- approx(x = df$timestamp, y = df$reading, xout = timestampVec, method="constant", rule = 2, f = 0, ties = mean)
-		res <- data.frame(reading=apprList$y, timestamp=apprList$x)
-	})
+#interpolateAccordingToSensorID <- function(dbResult, startT, stopT, deltaT) {
+#	interpolatedValues <- ddply(dbResult, c("sens_id", "unittypename"), function(df) {
+#		timestampVec <- seq(from = startT, to = stopT, by = deltaT) #does not exceed stopTimestamp
+#		apprList <- approx(x = df$timestamp, y = df$reading, xout = timestampVec, method="constant", rule = 2, f = 0, ties = mean)
+#		res <- data.frame(reading=apprList$y, timestamp=apprList$x)
+#	})
+#}
+
+#prepareDataForLocation <- function(df, deltaTime) {
+#	stopifnot(length(unique(df$loc_id))==1) # data for one single room only
+#	stopifnot(any(df$unittypename=="presence")) # must have an occupancy sensor
+#	# make sure there's one sensor per unittype
+#	ct <- count(df, c("unittypename", "sens_id"))
+#	stopifnot(length(unique(ct$unittypename)) == length(unique(ct$sens_id)) ) 
+#	startTimestamp <- min(df$timestamp[df$unittypename=="presence"])
+#	stopTimestamp <- max(df$timestamp2[df$unittypename=="presence"])
+#	sensorDataInterp <- interpolateAccordingToSensorID(df, startTimestamp, stopTimestamp, deltaTime)
+#}
+
+compressVec <- function(vec) {
+	rtz <- rle(vec)
+	pos <- cumsum(rtz$lengths)+1
+	pos <- pos[-length(pos)] #remove last element
+	pos <- c(1, pos)
+	#pos <- unique(c(1,pos,pos+1,length(vec)))
+	#pos <- pos[pos >= 0 & pos <= length(vec)]
+	return(pos)
 }
 
-prepareDataForLocation <- function(df, deltaTime) {
-	stopifnot(length(unique(df$loc_id))==1) # data for one single room only
-	stopifnot(any(df$unittypename=="presence")) # must have an occupancy sensor
-	# make sure there's one sensor per unittype
-	ct <- count(df, c("unittypename", "sens_id"))
-	stopifnot(length(unique(ct$unittypename)) == length(unique(ct$sens_id)) ) 
-	startTimestamp <- min(df$timestamp[df$unittypename=="presence"])
-	stopTimestamp <- max(df$timestamp2[df$unittypename=="presence"])
-	sensorDataInterp <- interpolateAccordingToSensorID(df, startTimestamp, stopTimestamp, deltaTime)
+compressSensor <- function(df, compColumnName, timest1ColName, timest2ColName) {
+	if(any(colnames(df) == timest2ColName)) {
+		df[, colnames(df) == timest2ColName] <- NULL
+	}
+	stopifnot(any(colnames(df) == compColumnName))
+	stopifnot(any(colnames(df) == timest1ColName))
+
+	colnames(df)[colnames(df)==timest1ColName] <- "timest1" # rename temporarily
+	lastRow <- df[nrow(df), ]
+	df <- df[compressVec(df[, colnames(df) == compColumnName]), ]
+	df$timest2 <- c(df$timest1[c(2:length(df$timest1))], lastRow$timest1)
+
+	colnames(df)[colnames(df)=="timest1"] <- timest1ColName
+	colnames(df)[colnames(df)=="timest2"] <- timest2ColName
+	return(df)
+}
+
+removeConstantPartsFromSensor <- function(df, reading, threshold) {
+	minMaxRows <- min(df$timestamp) == df$timestamp |
+		      max(df$timestamp) == df$timestamp
+	#print(df[minMaxRows, ])
+	stopifnot(sum(minMaxRows)==2)
+	idVec <- ((df$timestamp2 - df$timestamp) < threshold) & df$reading == reading & !minMaxRows
+	df <- df[!idVec, ]
 }
 
 prepareDataForLocationTable <- function(df, deltaTime) {
@@ -44,6 +80,18 @@ prepareDataForLocationTable <- function(df, deltaTime) {
 	ct <- count(df, c("unittypename", "sens_id"))
 	stopifnot(length(unique(ct$unittypename)) == length(unique(ct$sens_id)) ) 
 
+	# smooth presence Data
+	maxUnoccupiedGap <- 600 # seconds
+	minOccupancyDuration <- 600 # seconds
+	presenceData <- df[df$unittypename=="presence", ]
+	df <- df[df$unittypename!="presence", ]
+	presenceData <- removeConstantPartsFromSensor(presenceData, 0, maxUnoccupiedGap)
+	presenceData <- compressSensor(presenceData, "reading", "timestamp", "timestamp2")
+	presenceData <- removeConstantPartsFromSensor(presenceData, 1, minOccupancyDuration)
+	presenceData <- compressSensor(presenceData, "reading", "timestamp", "timestamp2")
+	df <- rbind(df, presenceData)
+	
+	# discretize and raster 
 	startTimestamp <- min(df$timestamp[df$unittypename=="presence"])
 	stopTimestamp <- max(df$timestamp2[df$unittypename=="presence"])
 	timestampVec <- seq(from = startTimestamp, to = stopTimestamp, by = deltaTime)
@@ -56,16 +104,6 @@ prepareDataForLocationTable <- function(df, deltaTime) {
 		return(apprList$y)
 	})
 	data.frame(timestamp=timestampVec, interp)
-}
-
-compressSensors <- function(vec) {
-	rtz <- rle(vec)
-	pos <- cumsum(rtz$lengths)+1
-	pos <- pos[-length(pos)] #remove last element
-	pos <- c(1, pos)
-	#pos <- unique(c(1,pos,pos+1,length(vec)))
-	#pos <- pos[pos >= 0 & pos <= length(vec)]
-	return(pos)
 }
 
 dbResult <- data.frame()
@@ -99,7 +137,8 @@ if(!file.exists(cacheFile))
 	dbResult <- dbResult[dbResult$timestamp > as.numeric(observationStart)*1000, ]
 
 
-	# we have to subtract one hour from all presence indicator readings: presence, doorcontact, windowcontact
+	# we have to subtract one hour from all presence indicator readings:
+	# presence, doorcontact, windowcontact
 	#dbResult[dbResult$unittypename %in% presenceFields, "timestamp"] <- dbResult[dbResult$unittypename %in% presenceFields, "timestamp"] - 1000*60*60 # subtract one hour # done on DB
 
 	presenceVal <- dbResult$reading[dbResult$unittypename %in% c("doorcontact", "windowcontact", "presence")]
@@ -108,15 +147,14 @@ if(!file.exists(cacheFile))
 
 	dbResult$timestamp <- dbResult$timestamp %/% 1000 # convert to seconds
 
-	# we add another column (timestamp2) to the data frame. this allows us to plot rectangles/intervals later on
+	# we add another column (timestamp2) to the data frame.
+	# this allows us to plot rectangles/intervals later on
 	ddplyCols <- c("sens_id")
 	dbResult <- ddply(dbResult, ddplyCols, function(df) {
-		tmp <- df[with(df, order(timestamp)), setdiff(colnames(dbResult),ddplyCols)] #sort and select columns
+		#sort and select columns
+		tmp <- df[with(df, order(timestamp)), setdiff(colnames(dbResult),ddplyCols)] 
 		if(nrow(tmp) > 0) {
-			lastRow <- tmp[nrow(tmp), ]
-			tmp <- tmp[compressSensors(tmp$reading), ]
-			#tmp$timestamp2 <- tmp$timestamp[c(2:length(tmp$timestamp),length(tmp$timestamp))]
-			tmp$timestamp2 <- c(tmp$timestamp[c(2:length(tmp$timestamp))], lastRow$timestamp)
+			tmp <- compressSensor(tmp, "reading", "timestamp", "timestamp2")
 		}
 		return(tmp)
 	})

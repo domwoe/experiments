@@ -23,8 +23,10 @@ locRes <- dlply(dbResult, c("loc_id"), function(df) {
 	#sensorDataTable encompasses one column per sensor type plus a timestamp column: 
 	#print(head(sensorDataTable))
 	
-	simpleMarkovModel <- SimpleMarkov(sensorData=sensorDataTable, steps=4)
-	sensorDataTable$prediction <- predictFromModel(simpleMarkovModel, sensorDataTable)
+	# pass data to to model and specify which sensors to use for prediction
+	simpleMarkovModel <- SimpleMarkov(sensorData=sensorDataTable, sensors=c("co2", "co2deriv", "humidity"))
+	# input new data to model and make prediction
+	sensorDataTable$prediction <- predictFromModel(simpleMarkovModel, newSensorData=sensorDataTable)
 	
 	#needs to be commented out / for debugging purposes:
 	#stop()
