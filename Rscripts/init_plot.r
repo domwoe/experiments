@@ -1,55 +1,112 @@
 #!/usr/bin/env Rscript
 
+plotLoss <- function(lpR) {
+	lpR <- melt(lpR, id.vars=c("measure"))
+	lpR$variable <- factor(lpR$variable)
+	print(lpR)
+	filename <- paste("binLossRate.pdf", sep="")
+	pdf(file=filename, width=7, height=5)
+	print(filename)
+	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=measure))
+	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
+	#plt <- plt + facet_grid(.~variable, scales="free_x")
+	plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks.x=element_blank(), legend.position = "top", legend.title=element_blank())
+	plt <- plt + labs(y="Binary error rate", x="Locations")
+	plt <- plt + scale_y_continuous(expand = c(0,0.01), limits = c(0,1.0))
+	print(plt)
+	dev.off()
+}
+
 plotSensorHistograms <- function(ldf, columnsToPlot) {
-	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) ))
+	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) )) #reassemble data frame
+	df$presence <- factor(df$presence)
 	#print(df[df$presence!=1 & df$presence!=0, ])
 	stopifnot(all(df$presence==1 | df$presence==0))
 	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
-	mlt$presence <- factor(mlt$presence)
+	num_bins <- 32
+	histD <- ddply(mlt, .(variable), function(x) {
+		rg <- range(x$value)
+		incr <- abs(rg[2]-rg[1])/num_bins
+		b <- seq(from=rg[1], to=rg[2], by=incr)
+		pHistD <- ddply(x, .(loc_id, presence), function(z) {
+			h <- hist(z$value, breaks=b, plot=FALSE)
+			ret <- data.frame(dens=(h$count/sum(h$count)),
+				  mids=h$mids,
+				  incr=incr)
+			return(ret)
+		})
+	})
 	#print(head(mlt))
 	filename <- paste("hist_sensorData.pdf", sep="")
 	pdf(file=filename, width=6, height=7)
 	print(filename)
-	lapply(dlply(mlt, .(variable)), function (mltp) {
+	lapply(dlply(histD, .(variable)), function (mltp) {
 		var <- unique(mltp$variable)
-		plt <- ggplot(data=mltp) + geom_histogram(aes(fill=presence, x=value, y=..count..), position="dodge", color="black", size=0.2) + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
+		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity", color="black", size=0.2) + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
 		print(plt)
 	})
 	dev.off()
 }
 
-plotHistOccupancy <- function(df) {	
+plotHistOccupancy <- function(df) {
 	presenceData <- df[df$unittypename == "presence" & df$reading == 1, ]
 	#print(head(presenceData))
 	presenceData$durationInSec <- (presenceData$timestamp2 - presenceData$timestamp)
 	presenceData$durationInHours <- presenceData$durationInSec / 3600
 	#presenceData$durationInSec <- as.POSIXct(presenceData$durationInSec, origin="1970-01-01")
 	#print(head(presenceData))
-	num_bins <- 17
-	hls <- lapply(dlply(presenceData, .(loc_id)), function(x) {
-	  rng <- max(x$durationInHours)
-	  bwidth <- rng/num_bins
-	  geom_histogram(data = x, aes(y=..count../sum(..count..)), binwidth=bwidth)
+	num_bins <- 16
+	histData <- ddply(presenceData, .(loc_id), function(x) {
+		m <- max(x$durationInHours)
+		incr <- m/num_bins
+		b <- seq(from=0, to=m, by=incr)
+		h <- hist(x$durationInHours, breaks=b, plot=FALSE)
+		ret <- data.frame(dens=(h$count/sum(h$count)),
+				  mids=h$mids,
+				  incr=incr,
+				  loc_displayname=unique(x$loc_displayname))
+		return(ret)
 	})
+	#hls <- lapply(dlply(presenceData, .(loc_id)), function(x) {
+	#  rng <- max(x$durationInHours)
+	#  bwidth <- rng/num_bins
+	#  geom_histogram(data = x, aes(y=..count../sum(..count..)), binwidth=bwidth)
+	#})
 	filename <- paste("hist_occupancy.pdf", sep="")
 	print(filename)
 	pdf(file=filename, width=7, height=9)
-	plt <- ggplot(data=presenceData, aes(x=durationInHours)) + hls + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() +labs(x="duration of occupied time interval [h]", y="Fraction of occupancy times", title="Occupancy histogram") #+ scale_x_datetime(labels = date_format("%H:%M"))
-
+	plt <- ggplot(data=histData, aes(x=mids, y=dens, width=incr))
+	plt <- plt + geom_bar(stat="identity", position="dodge")
+	plt <- plt + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw()
+	plt <- plt + labs(x="duration of occupied time interval [h]", y="Fraction of occupancy times per histogram bin", title="Occupancy histogram")
+	#plt <- plt + scale_y_log10()
+	#plt <- ggplot(data=presenceData, aes(x=durationInHours))
+	#plt <- plt + hls
+	#plt <- plt + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw() +labs(x="duration of occupied time interval [h]", y="Fraction of occupancy times", title="Occupancy histogram") #+ scale_x_datetime(labels = date_format("%H:%M"))
+	#plt <- plt #+ scale_y_log10()
 	print(plt)
 	dev.off()
 }
 
-plotSensorDataTable <- function(df, nm, columnsToPlot) {
+plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot) {
+	loc_id <- unique(dD$loc_id)
+	stopifnot(length(loc_id)==1)
+	stopifnot(loc_id == nm)
+	loc_displayname <- unique(dD$loc_displayname)
 	filename <- paste("locId_", nm, ".pdf", sep="")
 	print(filename)
 	pdf(file=filename, width=8, height=4)
-	mlt <- melt(df, id.vars=c("timestamp"), measure.vars=columnsToPlot)
+	rD$prediction <- pD$presence
+	mlt <- melt(rD, id.vars=c("timestamp"), measure.vars=c(columnsToPlot, "prediction"))
 	mlt$time <- as.POSIXct(mlt$timestamp, origin="1970-01-01")
 	mlt$timestamp <- NULL
 
 	startTimestamp <- min(mlt$time)
 	stopTimestamp <- max(mlt$time)
+
+	presenceLayer <- dD[dD$unittypename=="presence", ]
+	presenceLayer <- rbind.fill(lapply(c("prediction", "presence"), function(x) data.frame(presenceLayer, variable=x)))
 
 	startDateDay <- as.POSIXlt(startTimestamp, origin="1970-01-01")
 	startDateDay$mday <- startDateDay$mday -1
@@ -61,16 +118,18 @@ plotSensorDataTable <- function(df, nm, columnsToPlot) {
 
 	while(stopTimestamp > startDateDay)
 	{
-		plt <- ggplot(data = mlt, mapping=aes(x=time, y=value, color=variable))
-		plt <- plt + geom_step(size=0.2)
+		#mltPart <- mlt[mlt$time >= startDateDay & mlt$time <= endDateDay, ]
+		plt <- ggplot(data = mlt)
+		plt <- plt + geom_rect(data=presenceLayer, mapping = aes(xmin = time1, xmax = time2, ymin = -Inf, ymax = Inf*((reading*2)-1)), fill="green", color=NA, alpha=0.6)
+		plt <- plt + geom_step(data = mlt, mapping=aes(x=time, y=value), color="brown", size=0.35)
 		plt <- plt + facet_grid(variable~.,scales="free_y")
 		plt <- plt + scale_x_datetime(labels = date_format("%d/%m %H:%M"), expand = c(0,0), limits = c(as.POSIXct(startDateDay), as.POSIXct(endDateDay)))
 		plt <- plt + theme_bw()
 		plt <- plt + theme(legend.position = "top", legend.title=element_blank(), panel.margin = unit(0.3, "cm"), strip.text.y = element_text(size = 8), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank())
-
+		plt <- plt + guides(color="none")
 		plotDate <- startDateDay
 		plotDate$hour <- plotDate$hour + 6
-		plt <- plt + labs(title = paste(nm, ":", format(plotDate, "%Y-%m-%d")), x = "", y = "Value")
+		plt <- plt + labs(title = paste(loc_displayname, ":", nm, ":", format(plotDate, "%Y-%m-%d")), x = "", y = "Value")
 		print(plt)
 
 		startDateDay$mday <- startDateDay$mday + 1
