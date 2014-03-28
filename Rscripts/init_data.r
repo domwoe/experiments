@@ -10,10 +10,10 @@ firstDerivSecondOrderAccCentral <- function(vec) {
 	return(v)
 }
 
-firstDerivSpline <- function(timestamps, vec) {
+derivSpline <- function(timestamps, vec, deriv=1) {
 	#splineF <- sm.spline(timestamps, vec)
 	splineF <- smooth.Pspline(x=timestamps, y=vec, norder=3, method=3) # we need order 3 according to descr
-	newV <- predict(splineF, xarg=timestamps, nderiv = 1)
+	newV <- predict(splineF, xarg=timestamps, nderiv = deriv)
 	return(newV)
 }
 
@@ -72,7 +72,8 @@ removeConstantPartsFromSensor <- function(df, reading, threshold) {
 	df <- df[!idVec, ]
 }
 
-prepareDataForLocationTable <- function(df, deltaTime) {
+# parameters maxUnoccupiedGap and minOccupancyDuration are in seconds. They define the presence smoothing.
+prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=600, minOccupancyDuration=600) {
 	stopifnot(all(df$presence==1 | df$presence==0))
 	stopifnot(length(unique(df$loc_id))==1) # data for one single room only
 	stopifnot(any(df$unittypename=="presence")) # must have an occupancy sensor
@@ -80,27 +81,51 @@ prepareDataForLocationTable <- function(df, deltaTime) {
 	ct <- count(df, c("unittypename", "sens_id"))
 	stopifnot(length(unique(ct$unittypename)) == length(unique(ct$sens_id)) ) 
 
-	# smooth presence Data
-	maxUnoccupiedGap <- 600 # seconds
-	minOccupancyDuration <- 600 # seconds
+	# smooth presence Data and store in as new sensor type
 	presenceData <- df[df$unittypename=="presence", ]
-	df <- df[df$unittypename!="presence", ]
+	presenceData$unittypename = "smoothedPresence"
+	#df <- df[df$unittypename!="presence", ] # do not delete presence data
 	presenceData <- removeConstantPartsFromSensor(presenceData, 0, maxUnoccupiedGap)
 	presenceData <- compressSensor(presenceData, "reading", "timestamp", "timestamp2")
 	presenceData <- removeConstantPartsFromSensor(presenceData, 1, minOccupancyDuration)
 	presenceData <- compressSensor(presenceData, "reading", "timestamp", "timestamp2")
-	df <- rbind(df, presenceData)
+	df <- rbind(df, presenceData) # add smoothed presence to data frame
 	
+	userdefM <- function(vec) {
+		if(length(vec) != 1) {
+			print(vec)
+			stop()
+		}
+		stopifnot(length(vec)==1)
+		vec
+	}
+
 	# discretize and raster 
 	startTimestamp <- min(df$timestamp[df$unittypename=="presence"])
 	stopTimestamp <- max(df$timestamp2[df$unittypename=="presence"])
+	#print(c(startTimestamp, stopTimestamp))
 	timestampVec <- seq(from = startTimestamp, to = stopTimestamp, by = deltaTime)
 	interp <- dlply(df, .(unittypename), function(d) {
 		stopifnot(all(d$reading==1 | d$reading==0) | !(unique(d$unittypename)=="presence"))
+		#print(range(timestampVec))
+		#stopifnot(all(d$timestamp == cummax(d$timestamp))) # make sure timestamp is ascending
+		pind <- which(diff(d$timestamp)<=0)
+		if(length(pind) > 0) {
+			#print(pind)
+			spind <- unique(sort((min(pind)-5):(max(pind)+5)))
+			#print(spind)
+			print(d[spind, ])
+		}
+		stopifnot(all(diff(d$timestamp)>0))
 		apprList <- approx(x = d$timestamp, y = d$reading, xout = timestampVec, method="constant", rule = 2, f = 0, ties = max)
-		stopifnot(all( !is.na(apprList$y) ))
+		#if(!all(!is.na(apprList$y)) ) {
+		#	print(unique(d$unittypename))
+		#	v <- apprList$x[is.na(apprList$y)]
+		#	print(v)
+		#}
+		#stopifnot(all( !is.na(apprList$y) ))
 		#print(unique(d$unittypename))
-		stopifnot(all(apprList$y==1 | apprList$y==0) | !(unique(d$unittypename)=="presence"))
+		stopifnot(all(apprList$y==1 | apprList$y==0) | !(unique(d$unittypename)=="presence" | unique(d$unittypename)=="smoothedPresence" ))
 		return(apprList$y)
 	})
 	data.frame(timestamp=timestampVec, interp)

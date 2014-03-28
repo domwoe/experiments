@@ -8,15 +8,17 @@ plotScatterPlotContacts <- function(rasterDataPerRoom) {
 	lapply(rasterDataPerRoom, function(df) {
 		cols <- intersect(colnames(df), c("presence", "windowcontact", "doorcontact"))
 		if(length(cols) > 2) { # we have a window and door contact sensor
-			ddf <- df[, c("timestamp", "co2", "co2deriv", cols)]
+			ddf <- df[, c("timestamp", "co2", "co2deriv", "tempDeriv", "temperature", cols)]
 			ddf <- modifyList(ddf, lapply(ddf[, c("presence", "windowcontact", "doorcontact")], as.factor))
-			print(str(ddf))
+			#print(str(ddf))
 			#plt <- ggplot(data=ddf, mapping=aes(x=sqrt(co2^2 + co2deriv^2), y=atan2(co2deriv,co2) ))
-			plt <- ggplot(data=ddf, mapping=aes(x=co2, y=co2deriv))
-			plt <- plt + geom_point(mapping=aes(order=windowcontact, fill=windowcontact, color=windowcontact, shape=presence))
+			plt <- ggplot(data=ddf, mapping=aes(x=co2deriv, y=co2))
+			plt <- plt + geom_point(mapping=aes(order=windowcontact, fill=windowcontact, color=windowcontact, shape=windowcontact))
 			plt <- plt + scale_shape_manual(values=c(21,24))
-			plt <- plt + scale_color_manual(values=c("red","blue"))
+			#plt <- plt + scale_color_manual(values=c("black","yellow"))
 			plt <- plt + scale_fill_manual(values=c("red", "blue"))
+			#plt <- plt + scale_fill_gradient(low="red", high="blue")
+			#plt <- plt + scale_fill_gradient2(low="blue", high="red")
 			print(plt)
 		}
 	})

@@ -23,39 +23,27 @@ SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	l <- length(sensorData$presence)
 	digr <- data.frame(first=sensorData$presence,second=sensorData$presence[c(2:l,l)])
 	pMat <- as.matrix(table(digr))
-	colnames(pMat) <- NULL
-	rownames(pMat) <- NULL
 	pMat <- pMat/rowSums(pMat)
-	initV <- c(1/2, 1/2)
+	initC <- as.vector(table(sensorData$presence))
+	initV <- initC/sum(initC)
 	meanEstimate <- dlply(sensorData, .(presence), function(df) {
-		#print(colnames(df))
-		#print(sensors)
-		#print(colnames(df) %in% sensors)
-		#print(head(df[, colnames(df) %in% sensors]))
 		cM <- colMeans(df[, colnames(df) %in% sensors])
 		vec <- as.vector(cM)
-		names(vec) <- NULL
 		return(vec)
 	})
-	names(meanEstimate) <- NULL
 	attr(meanEstimate,"split_type") <- NULL
 	attr(meanEstimate,"split_labels") <- NULL
 	sigmaEstimate <- dlply(sensorData, .(presence), function(df) {
-		#print(colnames(df))
 		v <- diag(var(df[, colnames(df) %in% sensors])) # extract variances from co-variance matrix
-		v <- sqrt(v) # compute standard devitaion from variance
+		#v <- sqrt(v) # compute standard devitaion from variance // mhsmm needs variance!
 		d <- diag(x=v) # create diagonal matrix
-		colnames(d) <- NULL #names(v)
-		rownames(d) <- NULL #names(v)
+		colnames(d) <- names(v)
+		rownames(d) <- names(v)
 		return(d)
 	})
-	names(sigmaEstimate) <- NULL
 	attr(sigmaEstimate,"split_type") <- NULL
 	attr(sigmaEstimate,"split_labels") <- NULL
 	b <- list(mu=meanEstimate,sigma=sigmaEstimate)
-	#print(meanEstimate)
-	#print(sigmaEstimate)
-	#print(b)
 	hmmmodel <- hmmspec(init=initV, trans=pMat, parms.emission=b, dens.emission=dmvnorm.hsmm)
 	new("SimpleMarkov", Model(sensorData, sensors), model=hmmmodel, ...)
 }
@@ -71,6 +59,8 @@ setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(
 	newDat <- as.matrix(newDat)
 	# we have to create a list first before handing data to predict to avoid warnings and other stuff
 	prediction <- predict.hmmspec(object@model,newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")
+	#prediction <- predict.hmmspec(object@model,newdata=newDat,method="smoothed")
+	#print(str(prediction))
 	predictionNormalized <- prediction$s -1
 	return(predictionNormalized)
 })

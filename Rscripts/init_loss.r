@@ -6,6 +6,17 @@ meanBinaryLoss <- function(vec1, vec2) {
 	mean(abs(vec1-vec2))
 }
 
+lossMetrics <- function(truth, prediction) {
+	binLoss <- meanBinaryLoss(truth, prediction)
+	p <- sum(truth == 1)
+	n <- sum(truth == 0)
+	tp <- sum(truth == 1 & prediction == 1)
+	tn <- sum(truth == 0 & prediction == 0)
+	fp <- sum(truth == 0 & prediction == 1)
+	fn <- sum(truth == 1 & prediction == 0)
+	c(binLoss=binLoss, tpr=tp/p, fpr=fp/n)
+}
+
 meanBinaryLossRaw <- function(rawDf, predDf) {
 	ind <- findInterval(predDf$timestamp, rawDf$timestamp)
 	stopifnot(length(ind)==nrow(predDf))
