@@ -2,7 +2,8 @@
 
 # install all required packages and load them
 options("repos"="http://cran.us.r-project.org")
-list.of.packages <- c("ggplot2", "reshape2", "gridExtra", "grid", "plyr", "RPostgreSQL", "scales", "methods", "pspline", "RHmm", "mhsmm")
+#list.of.packages <- c("ggplot2", "reshape2", "gridExtra", "grid", "plyr", "RPostgreSQL", "scales", "methods", "pspline", "RHmm", "mhsmm")
+list.of.packages <- c("ggplot2", "reshape2", "plyr", "RPostgreSQL", "pspline", "mhsmm", "scales", "gridExtra")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 retVal <- lapply(list.of.packages, require, character.only=T)

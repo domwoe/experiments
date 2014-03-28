@@ -1,9 +1,32 @@
 #!/usr/bin/env Rscript
 
+
+plotScatterPlotContacts <- function(rasterDataPerRoom) {
+	filename <- paste("scatterPlotContacts.pdf", sep="")
+	pdf(file=filename, width=7, height=5)
+	print(filename)
+	lapply(rasterDataPerRoom, function(df) {
+		cols <- intersect(colnames(df), c("presence", "windowcontact", "doorcontact"))
+		if(length(cols) > 2) { # we have a window and door contact sensor
+			ddf <- df[, c("timestamp", "co2", "co2deriv", cols)]
+			ddf <- modifyList(ddf, lapply(ddf[, c("presence", "windowcontact", "doorcontact")], as.factor))
+			print(str(ddf))
+			#plt <- ggplot(data=ddf, mapping=aes(x=sqrt(co2^2 + co2deriv^2), y=atan2(co2deriv,co2) ))
+			plt <- ggplot(data=ddf, mapping=aes(x=co2, y=co2deriv))
+			plt <- plt + geom_point(mapping=aes(order=windowcontact, fill=windowcontact, color=windowcontact, shape=presence))
+			plt <- plt + scale_shape_manual(values=c(21,24))
+			plt <- plt + scale_color_manual(values=c("red","blue"))
+			plt <- plt + scale_fill_manual(values=c("red", "blue"))
+			print(plt)
+		}
+	})
+	dev.off()
+}
+
 plotLoss <- function(lpR) {
 	lpR <- melt(lpR, id.vars=c("measure"))
 	lpR$variable <- factor(lpR$variable)
-	print(lpR)
+	#print(lpR)
 	filename <- paste("binLossRate.pdf", sep="")
 	pdf(file=filename, width=7, height=5)
 	print(filename)
@@ -24,12 +47,24 @@ plotSensorHistograms <- function(ldf, columnsToPlot) {
 	#print(df[df$presence!=1 & df$presence!=0, ])
 	stopifnot(all(df$presence==1 | df$presence==0))
 	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
-	num_bins <- 32
-	histD <- ddply(mlt, .(variable), function(x) {
+	num_bins <- 25
+	#histD <- ddply(mlt, .(variable), function(x) {
+	#	rg <- range(x$value)
+	#	incr <- abs(rg[2]-rg[1])/num_bins
+	#	b <- seq(from=rg[1], to=rg[2], by=incr)
+	#	pHistD <- ddply(x, .(loc_id, presence), function(z) {
+	#		h <- hist(z$value, breaks=b, plot=FALSE)
+	#		ret <- data.frame(dens=(h$count/sum(h$count)),
+	#			  mids=h$mids,
+	#			  incr=incr)
+	#		return(ret)
+	#	})
+	#})
+	histD <- ddply(mlt, .(variable,loc_id), function(x) {
 		rg <- range(x$value)
 		incr <- abs(rg[2]-rg[1])/num_bins
 		b <- seq(from=rg[1], to=rg[2], by=incr)
-		pHistD <- ddply(x, .(loc_id, presence), function(z) {
+		pHistD <- ddply(x, .(presence), function(z) {
 			h <- hist(z$value, breaks=b, plot=FALSE)
 			ret <- data.frame(dens=(h$count/sum(h$count)),
 				  mids=h$mids,
@@ -43,7 +78,8 @@ plotSensorHistograms <- function(ldf, columnsToPlot) {
 	print(filename)
 	lapply(dlply(histD, .(variable)), function (mltp) {
 		var <- unique(mltp$variable)
-		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity", color="black", size=0.2) + facet_grid(loc_id~., scales="free_y") + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
+		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity") + facet_wrap(~loc_id, scales="free", ncol=2) + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
+		plt <- plt + theme(axis.title.x=element_blank(), legend.position = "bottom")
 		print(plt)
 	})
 	dev.off()

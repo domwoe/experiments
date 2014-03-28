@@ -23,6 +23,9 @@ rasterDataPerRoom <- lapply(dataPerRoom, FUN=function(df) {
 	return(sensorDataTable)
 })
 
+## scatter plot for window and door contacts
+plotScatterPlotContacts(rasterDataPerRoom)
+
 plotSensorHistograms(rasterDataPerRoom, c("co2deriv", "co2", "temperature", "humidity"))
 
 cat("Train model and make prediction\n")
