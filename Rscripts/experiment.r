@@ -4,14 +4,13 @@ source("init_init.r")
 
 deltaTime <- 300 # in seconds
 
-
 ## plot histograms for occupany data
-plotHistOccupancy(dbResult)
+plotHistOccupancy(allDataRaw)
 
 ## plot raw sensor data for each location:
-#d_ply(dbResult, c("loc_id"), function(df) plotLocation(df, "location_basis") )
+d_ply(allDataRaw, c("loc_id"), function(df) plotLocation(df, "location_basis") )
 
-dataPerRoom <- dlply(dbResult, c("loc_id"))
+dataPerRoom <- dlply(allDataRaw, c("loc_id"))
 
 rasterDataPerRoom <- lapply(dataPerRoom, FUN=function(df) {
 	sensorDataTable <- prepareDataForLocationTable(df, deltaTime)

@@ -47,8 +47,9 @@ compressVec <- function(vec) {
 }
 
 compressSensor <- function(df, compColumnName, timest1ColName, timest2ColName) {
+	#print(compColumnName)
 	if(any(colnames(df) == timest2ColName)) {
-		df[, colnames(df) == timest2ColName] <- NULL
+		df[, colnames(df) == timest2ColName] <- NULL # delete any existing column
 	}
 	stopifnot(any(colnames(df) == compColumnName))
 	stopifnot(any(colnames(df) == timest1ColName))
@@ -58,6 +59,7 @@ compressSensor <- function(df, compColumnName, timest1ColName, timest2ColName) {
 	df <- df[compressVec(df[, colnames(df) == compColumnName]), ]
 	df$timest2 <- c(df$timest1[c(2:length(df$timest1))], lastRow$timest1)
 
+	# rename back
 	colnames(df)[colnames(df)=="timest1"] <- timest1ColName
 	colnames(df)[colnames(df)=="timest2"] <- timest2ColName
 	return(df)
@@ -83,7 +85,7 @@ prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=600, min
 
 	# smooth presence Data and store in as new sensor type
 	presenceData <- df[df$unittypename=="presence", ]
-	presenceData$unittypename = "smoothedPresence"
+	presenceData$unittypename = "smoothedPresence" # rename column
 	#df <- df[df$unittypename!="presence", ] # do not delete presence data
 	presenceData <- removeConstantPartsFromSensor(presenceData, 0, maxUnoccupiedGap)
 	presenceData <- compressSensor(presenceData, "reading", "timestamp", "timestamp2")
@@ -111,13 +113,13 @@ prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=600, min
 		#stopifnot(all(d$timestamp == cummax(d$timestamp))) # make sure timestamp is ascending
 		pind <- which(diff(d$timestamp)<=0)
 		if(length(pind) > 0) {
-			#print(pind)
+			print(pind)
 			spind <- unique(sort((min(pind)-5):(max(pind)+5)))
 			#print(spind)
 			print(d[spind, ])
 		}
-		stopifnot(all(diff(d$timestamp)>0))
-		apprList <- approx(x = d$timestamp, y = d$reading, xout = timestampVec, method="constant", rule = 2, f = 0, ties = max)
+		stopifnot(all(diff(d$timestamp)>0)) # check if ascending
+		apprList <- approx(x = d$timestamp, y = d$reading, xout = timestampVec, method="constant", rule = 2, f = 0, ties = userdefM)
 		#if(!all(!is.na(apprList$y)) ) {
 		#	print(unique(d$unittypename))
 		#	v <- apprList$x[is.na(apprList$y)]
@@ -130,6 +132,28 @@ prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=600, min
 	})
 	data.frame(timestamp=timestampVec, interp)
 }
+
+cutoffUnusedDays <- function(dbResult, timeFrames, startDateC, endDateC) {
+	#d_ply(dbResult, "sens_id", function(df) stopifnot(all(diff(df$timestamp)>0)) )
+	mDf <- merge(dbResult, timeFrames, by="loc_id", sort=FALSE)
+	mDf <- mDf[with(mDf, order(loc_id, sens_id, timestamp)), ] # reconstruct proper order in df 
+	#d_ply(mDf, "sens_id", function(df) stopifnot(all(diff(df$timestamp)>0)) )
+	rmCols <- setdiff(colnames(timeFrames), colnames(dbResult))
+	ids <- (mDf$timestamp >= mDf[, startDateC] & mDf$timestamp <= mDf[, endDateC]) |
+		(mDf$timestamp2 >= mDf[, startDateC] & mDf$timestamp2 <= mDf[, endDateC]) 
+	mDf <- mDf[ids, ]
+	mDf[(mDf$timestamp < mDf[, startDateC]), "timestamp"] <- mDf[(mDf$timestamp < mDf[, startDateC]), startDateC]
+	mDf[(mDf$timestamp2 > mDf[, endDateC]), "timestamp2"] <- mDf[(mDf$timestamp2 > mDf[, endDateC]), endDateC]
+	return( mDf[, !(colnames(mDf) %in% rmCols)] )
+}
+
+
+
+
+
+### data loading procedure ###
+
+
 
 dbResult <- data.frame()
 cacheFile <- "dbResult.txt"
@@ -190,12 +214,21 @@ if(!file.exists(cacheFile))
 	cat("Loading data from local file\n")
 	dbResult <- read.table(file=cacheFile, header=TRUE, sep="\t")
 }
+
+# load experiment meta data / experiment days
+timeFrames <- read.table(file="experimentTimeFrames.txt", header=TRUE, sep="\t")
+timeFrames <- modifyList(timeFrames,
+			lapply(timeFrames[, colnames(timeFrames)[grep("Date",colnames(timeFrames))]],
+				function(x) as.POSIXct(as.character(x), origin="1970-01-01")
+				)
+			)
+
+allDataRaw <- cutoffUnusedDays(dbResult, timeFrames, "experimentStartDate", "experimentStopDate")
+dbResult <- NULL
+
 # transform timestamps to actual times / add one column each
-dbResult$time1 <- as.POSIXct(dbResult$timestamp, origin="1970-01-01")
-dbResult$time2 <- as.POSIXct(dbResult$timestamp2, origin="1970-01-01")
-
-
-
+#allDataRaw$time1 <- as.POSIXct(allDataRaw$timestamp, origin="1970-01-01")
+#allDataRaw$time2 <- as.POSIXct(allDataRaw$timestamp2, origin="1970-01-01")
 
 
 

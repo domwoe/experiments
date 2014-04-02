@@ -25,11 +25,14 @@ plotScatterPlotContacts <- function(rasterDataPerRoom) {
 	dev.off()
 }
 
-plotLoss <- function(lpR) {
+plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
+	cat(paste(title, "\n"))
+	lpR <- as.data.frame(lpR)
+	lpR$measure <- factor(rownames(lpR))
+	print(lpR)
 	lpR <- melt(lpR, id.vars=c("measure"))
 	lpR$variable <- factor(lpR$variable)
 	#print(lpR)
-	filename <- paste("binLossRate.pdf", sep="")
 	pdf(file=filename, width=7, height=5)
 	print(filename)
 	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=measure))
@@ -37,7 +40,7 @@ plotLoss <- function(lpR) {
 	#plt <- plt + facet_grid(.~variable, scales="free_x")
 	plt <- plt + theme_bw()
 	plt <- plt + theme(axis.ticks.x=element_blank(), legend.position = "top", legend.title=element_blank())
-	plt <- plt + labs(y="Binary error rate", x="Locations")
+	plt <- plt + labs(y="Metric Score", x="Locations")
 	plt <- plt + scale_y_continuous(expand = c(0,0.01), limits = c(0,1.0))
 	print(plt)
 	dev.off()
@@ -127,12 +130,12 @@ plotHistOccupancy <- function(df) {
 	dev.off()
 }
 
-plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot) {
+plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot, prefix) {
 	loc_id <- unique(dD$loc_id)
 	stopifnot(length(loc_id)==1)
 	stopifnot(loc_id == nm)
 	loc_displayname <- unique(dD$loc_displayname)
-	filename <- paste("locId_", nm, ".pdf", sep="")
+	filename <- paste(prefix, "_", nm, ".pdf", sep="")
 	print(filename)
 	pdf(file=filename, width=8, height=4)
 	rD$prediction <- pD$presence
@@ -145,6 +148,8 @@ plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot) {
 
 	presenceLayer <- dD[dD$unittypename=="presence", ]
 	presenceLayer <- rbind.fill(lapply(c("prediction", "presence"), function(x) data.frame(presenceLayer, variable=x)))
+	presenceLayer$time1 <- as.POSIXct(presenceLayer$timestamp, origin="1970-01-01")
+	presenceLayer$time2 <- as.POSIXct(presenceLayer$timestamp2, origin="1970-01-01")
 
 	startDateDay <- as.POSIXlt(startTimestamp, origin="1970-01-01")
 	startDateDay$mday <- startDateDay$mday -1
@@ -181,6 +186,9 @@ plotLocation <- function(df, filePrefix) {
 	loc_id <- unique(df$loc_id)
 	stopifnot(length(loc_id)==1)
 	loc_displayname <- unique(df$loc_displayname)
+
+	df$time1 <- as.POSIXct(df$timestamp, origin="1970-01-01")
+	df$time2 <- as.POSIXct(df$timestamp2, origin="1970-01-01")
 
 	presenceFields <- c("presence", "doorcontact", "windowcontact")
 	contactFields <- c("doorcontact", "windowcontact")
