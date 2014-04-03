@@ -1,10 +1,50 @@
 #!/usr/bin/env Rscript
 
+plotSingleDay <- function(prediction, rawData, startD, endD) {
+	prediction$time <- as.POSIXct(prediction$timestamp, origin="1970-01-01")
+
+	startDp <- as.POSIXct(startD, origin="1970-01-01")
+	endDp <- as.POSIXct(endD, origin="1970-01-01") 
+	
+	prediction <- prediction[prediction$time >= startDp & prediction$time <= endDp, ]
+
+	presenceLayer <- rawData[rawData$unittypename=="presence", ]
+	presenceLayer$time1 <- as.POSIXct(presenceLayer$timestamp, origin="1970-01-01")
+	presenceLayer$time2 <- as.POSIXct(presenceLayer$timestamp2, origin="1970-01-01")
+
+	presenceLayer <- presenceLayer[(presenceLayer$time1 >= startDp & presenceLayer$time1 <= endDp) | (presenceLayer$time2 >= startDp & presenceLayer$time2 <= endDp), ]
+	presenceLayer[presenceLayer$time1 < startDp, "time1"] <- startDp
+	presenceLayer[presenceLayer$time2 > endDp, "time2"] <- endDp
+
+	plt <- ggplot(data = prediction)
+	plt <- plt + geom_rect(data=presenceLayer, mapping = aes(xmin = time1, xmax = time2, ymin = 0, ymax = reading), fill="red", color=NA, alpha=0.7)
+	plt <- plt + geom_step(data = prediction, mapping=aes(x=time, y=presence), color="blue", size=0.8)
+	plt <- plt + scale_x_datetime(labels = date_format("%H:%M"), expand = c(0.005, 0), limits = c(startDp, endDp) )
+	plt <- plt + scale_y_continuous(breaks = c(0,1), labels = c("Unoccupied", "Occupied"), expand=c(0.0, 0.05) )
+	plt <- plt + theme_bw()
+	plt <- plt + theme(legend.position = "top", legend.title=element_blank(), panel.margin = unit(0.3, "cm"), strip.text.y = element_text(size = 8), axis.title.y = element_blank(), axis.title.x = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.ticks.length = unit(0.25, "cm"))
+	#plt <- plt + guides(color="none")
+	plt <- plt + labs(x = "", y = "")
+	print(plt)
+
+}
+
+plotSingleDayPaperAntjeBad <- function(dataPerRoomValidationAug, predictionPerRoomValidation, dataPerRoomValidation, columnsToPlot) {
+	pdff(file="singleDay_Antje_Bad.pdf", width=11.2, height=1.4)
+	plotSingleDay(predictionPerRoomValidation[["60"]],
+			dataPerRoomValidation[["60"]],
+			"2014-02-10 00:00:00",
+			"2014-02-11 00:00:00" )
+	plotSingleDay(predictionPerRoomValidation[["61"]],
+			dataPerRoomValidation[["61"]],
+			"2014-02-10 00:00:00",
+			"2014-02-11 00:00:00" )
+	dev.off()
+}
 
 plotScatterPlotContacts <- function(rasterDataPerRoom) {
 	filename <- paste("scatterPlotContacts.pdf", sep="")
-	pdf(file=filename, width=7, height=5)
-	print(filename)
+	pdff(file=filename, width=7, height=5)
 	lapply(rasterDataPerRoom, function(df) {
 		cols <- intersect(colnames(df), c("presence", "windowcontact", "doorcontact"))
 		if(length(cols) > 2) { # we have a window and door contact sensor
@@ -25,6 +65,50 @@ plotScatterPlotContacts <- function(rasterDataPerRoom) {
 	dev.off()
 }
 
+plotLossDay <- function(df, filename="metricDay.pdf") {
+	mlt <- melt(df, measure.vars=c("validation", "training"))
+	print(head(mlt))
+	pdff(file=filename, width=9, height=9)
+	plt <- ggplot(data = mlt, aes(y=value, x=variable, fill=metric))
+	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
+	plt <- plt + facet_grid(tDay ~ loc_id, scales="free_x")
+	#plt <- plt + facet_grid(.~variable, scales="free_x")
+	plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks.x=element_blank(), legend.position = "top", legend.title=element_blank())
+	plt <- plt + labs(y="Metric Score", x="Locations")
+	plt <- plt + scale_y_continuous(expand = c(0,0.01), limits = c(0,1.0))
+	print(plt)
+	dev.off()
+}
+
+plotLossPaper <- function(lpR, filename, title="Loss") {
+	loc_ids <- c(11,12,16,14,47,45,46,44,60,61,62)
+	ids <- c(1,2,3,4,5,6,7,8,9,10,11)
+	names(loc_ids) <- as.character(ids)
+	lpR <- as.data.frame(lpR)
+	lpR$metric <- factor(rownames(lpR))
+	colnames(lpR) <- sapply(colnames(lpR), function(n) {
+		if(n %in% loc_ids) {
+			return(names(loc_ids)[loc_ids==n])
+		} else {
+			return(n)
+		}
+	})
+	lpR <- melt(lpR, id.vars=c("metric"))
+	lpR$line <- as.numeric(as.numeric(as.character(lpR$variable)) >= 6)
+	#lpR$variable <- factor(as.character(lpR$variable))
+	pdff(file=filename, width=7, height=6.3)
+	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=metric))
+	plt <- plt + geom_bar(stat="identity", color="black", size=0.15, width=0.3, position = position_dodge(width = 0.42))
+	plt <- plt + facet_wrap(~line, scales="free_x", ncol=1)
+	plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.text = element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.9, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_text(vjust=-0.5) )
+	plt <- plt + labs(y="Metric Score", x="Room Id")
+	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
+	print(plt)
+	dev.off()
+}
+
 plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
 	cat(paste(title, "\n"))
 	lpR <- as.data.frame(lpR)
@@ -33,8 +117,7 @@ plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
 	lpR <- melt(lpR, id.vars=c("measure"))
 	lpR$variable <- factor(lpR$variable)
 	#print(lpR)
-	pdf(file=filename, width=7, height=5)
-	print(filename)
+	pdff(file=filename, width=7, height=5)
 	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=measure))
 	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
 	#plt <- plt + facet_grid(.~variable, scales="free_x")
@@ -43,6 +126,54 @@ plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
 	plt <- plt + labs(y="Metric Score", x="Locations")
 	plt <- plt + scale_y_continuous(expand = c(0,0.01), limits = c(0,1.0))
 	print(plt)
+	dev.off()
+}
+
+plotSensorHistogramsAntje <- function(ldf, columnsToPlot) {
+	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) )) #reassemble data frame
+	df$presence <- factor(df$presence)
+	#print(df[df$presence!=1 & df$presence!=0, ])
+	stopifnot(all(df$presence==1 | df$presence==0))
+	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
+	num_bins <- 25
+	#histD <- ddply(mlt, .(variable), function(x) {
+	#	rg <- range(x$value)
+	#	incr <- abs(rg[2]-rg[1])/num_bins
+	#	b <- seq(from=rg[1], to=rg[2], by=incr)
+	#	pHistD <- ddply(x, .(loc_id, presence), function(z) {
+	#		h <- hist(z$value, breaks=b, plot=FALSE)
+	#		ret <- data.frame(dens=(h$count/sum(h$count)),
+	#			  mids=h$mids,
+	#			  incr=incr)
+	#		return(ret)
+	#	})
+	#})
+	histD <- ddply(mlt, .(variable,loc_id), function(x) {
+		rg <- range(x$value)
+		incr <- abs(rg[2]-rg[1])/num_bins
+		b <- seq(from=rg[1], to=rg[2], by=incr)
+		pHistD <- ddply(x, .(presence), function(z) {
+			h <- hist(z$value, breaks=b, plot=FALSE)
+			ret <- data.frame(dens=(h$count/sum(h$count)),
+				  mids=h$mids,
+				  incr=incr)
+			return(ret)
+		})
+	})
+	#print(head(mlt))
+	histD <- histD[histD$loc_id==60, ]
+	filename <- paste("hist_sensorDataAntje.pdf", sep="")
+	units <- setNames(c("Parts per million (ppm)", "Change in concentration per 5 minutes", "Change in concentration per (5 minutes)²", "Degrees celsius", "Relative humidity in %"),
+			  c("co2", "co2deriv", "co2deriv2", "temperature", "humidity")	)
+	pdff(file=filename, width=3, height=1.5)
+	lapply(dlply(histD, .(variable)), function (mltp) {
+		var <- unique(mltp$variable)
+		unitx <- units[names(units)==var]
+		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity") + theme_bw() +labs(x=unitx, y="Fraction in range") #+ scale_y_log10()
+		plt <- plt + theme(legend.position = "bottom", axis.title = element_text(size=7), axis.text = element_text(size=6), axis.ticks = element_line(size=0.2), axis.title.y = element_text(vjust=0.2), axis.title.x = element_text(vjust=0.15), axis.ticks.length = unit(0.1, "cm"), panel.border = element_rect(fill = NULL, colour = "black", size = 0.2) )
+		plt <- plt + guides(fill=FALSE)
+		print(plt)
+	})
 	dev.off()
 }
 
@@ -79,8 +210,7 @@ plotSensorHistograms <- function(ldf, columnsToPlot) {
 	})
 	#print(head(mlt))
 	filename <- paste("hist_sensorData.pdf", sep="")
-	pdf(file=filename, width=6, height=7)
-	print(filename)
+	pdff(file=filename, width=6, height=7)
 	lapply(dlply(histD, .(variable)), function (mltp) {
 		var <- unique(mltp$variable)
 		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity") + facet_wrap(~loc_id, scales="free", ncol=2) + theme_bw() +labs(x="Value", y="Fraction", title=var) #+ scale_y_log10()
@@ -115,8 +245,7 @@ plotHistOccupancy <- function(df) {
 	#  geom_histogram(data = x, aes(y=..count../sum(..count..)), binwidth=bwidth)
 	#})
 	filename <- paste("hist_occupancy.pdf", sep="")
-	print(filename)
-	pdf(file=filename, width=7, height=9)
+	pdff(file=filename, width=7, height=9)
 	plt <- ggplot(data=histData, aes(x=mids, y=dens, width=incr))
 	plt <- plt + geom_bar(stat="identity", position="dodge")
 	plt <- plt + facet_wrap(~loc_id+loc_displayname, scales="free", ncol = 2) + theme_bw()
@@ -136,8 +265,7 @@ plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot, prefix) {
 	stopifnot(loc_id == nm)
 	loc_displayname <- unique(dD$loc_displayname)
 	filename <- paste(prefix, "_", nm, ".pdf", sep="")
-	print(filename)
-	pdf(file=filename, width=8, height=4)
+	pdff(file=filename, width=8, height=4)
 	rD$prediction <- pD$presence
 	mlt <- melt(rD, id.vars=c("timestamp"), measure.vars=c(columnsToPlot, "prediction"))
 	mlt$time <- as.POSIXct(mlt$timestamp, origin="1970-01-01")
@@ -152,12 +280,12 @@ plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot, prefix) {
 	presenceLayer$time2 <- as.POSIXct(presenceLayer$timestamp2, origin="1970-01-01")
 
 	startDateDay <- as.POSIXlt(startTimestamp, origin="1970-01-01")
-	startDateDay$mday <- startDateDay$mday -1
-	startDateDay$hour = 22
+	#startDateDay$mday <- startDateDay$mday -1
+	startDateDay$hour = 0
 
 	endDateDay <- startDateDay
 	endDateDay$mday <- endDateDay$mday + 1
-	endDateDay$hour <- endDateDay$hour + 4
+	#endDateDay$hour <- endDateDay$hour + 4
 
 	while(stopTimestamp > startDateDay)
 	{
@@ -219,8 +347,7 @@ plotLocation <- function(df, filePrefix) {
 	endDateDay$hour <- endDateDay$hour + 4
 
 	filename <- paste(filePrefix, "_", loc_id, ".pdf", sep="")
-	print(filename)
-	pdf(file=filename, width=8, height=4)
+	pdff(file=filename, width=8, height=4)
 
 	while(stopTimestamp > startDateDay)
 	{

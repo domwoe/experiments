@@ -15,8 +15,32 @@ RfilesSelfRemoved <- Rfiles[!(Rfiles %in% c("init_init.r"))]
 print(RfilesSelfRemoved)
 lapply(RfilesSelfRemoved, source)
 
+#pdf <- function(...) {
+#	cat("Please use pdff(...) instead of pdf(...). Stopping.\n")
+#	stop()
+#}
 
 
+pdff <- function(filename, ...) {
+	foldername <- paste(Sys.getenv("ScriptName"), "out", sep="_")
+	dir.create(foldername, showWarnings = FALSE)
+	filename <- paste(foldername, filename, sep="/")
+	print(filename)
+	pdf(file=filename, ...)
+}
+
+thisFile <- function() {
+        cmdArgs <- commandArgs(trailingOnly = FALSE)
+        needle <- "--file="
+        match <- grep(needle, cmdArgs)
+        if (length(match) > 0) {
+                # Rscript
+                return(sub(needle, "", cmdArgs[match]))
+        } else {
+                # 'source'd via R console
+                return(normalizePath(sys.frames()[[1]]$ofile))
+        }
+}
 
 
 

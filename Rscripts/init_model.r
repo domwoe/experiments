@@ -21,6 +21,7 @@ setMethod("predictFromModel", signature("Model", "data.frame"), function(object,
 
 SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	l <- length(sensorData$presence)
+	#print(l)
 	digr <- data.frame(first=sensorData$presence,second=sensorData$presence[c(2:l,l)])
 	pMat <- as.matrix(table(digr))
 	pMat <- pMat/rowSums(pMat)

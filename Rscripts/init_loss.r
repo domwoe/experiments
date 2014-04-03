@@ -14,8 +14,8 @@ lossMetrics <- function(truth, prediction) {
 	tn <- sum(truth == 0 & prediction == 0)
 	fp <- sum(truth == 0 & prediction == 1)
 	fn <- sum(truth == 1 & prediction == 0)
-	c(sensitivity=tp/p, specificity=tn/n, precision=tp/(tp+fp), accuracy=(tp+tn)/(p+n),
-	  f1score=2*tp/(2*tp + fp + fn) )
+	c(Sensitivity=tp/p, Specificity=tn/n, Precision=tp/(tp+fp), Accuracy=(tp+tn)/(p+n),
+	  F1score=2*tp/(2*tp + fp + fn) )
 }
 
 meanBinaryLossRaw <- function(rawDf, predDf) {

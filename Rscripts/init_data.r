@@ -75,7 +75,7 @@ removeConstantPartsFromSensor <- function(df, reading, threshold) {
 }
 
 # parameters maxUnoccupiedGap and minOccupancyDuration are in seconds. They define the presence smoothing.
-prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=600, minOccupancyDuration=600) {
+prepareDataForLocationTable <- function(df, deltaTime, maxUnoccupiedGap=1800, minOccupancyDuration=1800) {
 	stopifnot(all(df$presence==1 | df$presence==0))
 	stopifnot(length(unique(df$loc_id))==1) # data for one single room only
 	stopifnot(any(df$unittypename=="presence")) # must have an occupancy sensor
