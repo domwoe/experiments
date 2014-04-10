@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 
 source("init_init.r")
+Sys.setenv(ScriptName = thisFile())
 
 deltaTime <- 300 # in seconds
 

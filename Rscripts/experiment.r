@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 
 source("init_init.r")
+Sys.setenv(ScriptName = thisFile())
 
 deltaTime <- 300 # in seconds
 
@@ -62,7 +63,7 @@ plotLoss(lossPerRoom)
 cat("Generating plots...\n")
 ## plot augmented/interpolated data for each location (takes a while depending on how small deltaTime is)
 columnsToPlot <- c("co2deriv", "co2", "humidity", "presence")
-mapply(function(rD, nm, pD, dD) plotSensorDataTable(rD, nm, pD, dD, columnsToPlot),
+mapply(function(rD, nm, pD, dD) plotSensorDataTable(rD, nm, pD, dD, columnsToPlot, prefix="training"),
 						rasterDataPerRoom,
 						names(rasterDataPerRoom),
 						predictionPerRoom,

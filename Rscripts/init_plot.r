@@ -82,7 +82,7 @@ plotLossDay <- function(df, filename="metricDay.pdf") {
 }
 
 plotLossPaper <- function(lpR, filename, title="Loss") {
-	loc_ids <- c(11,12,16,14,47,45,46,44,60,61,62)
+	loc_ids <- c(11,12,16,14,47,45,46,44,60,62,61)
 	ids <- c(1,2,3,4,5,6,7,8,9,10,11)
 	names(loc_ids) <- as.character(ids)
 	lpR <- as.data.frame(lpR)
@@ -163,13 +163,13 @@ plotSensorHistogramsAntje <- function(ldf, columnsToPlot) {
 	#print(head(mlt))
 	histD <- histD[histD$loc_id==60, ]
 	filename <- paste("hist_sensorDataAntje.pdf", sep="")
-	units <- setNames(c("Parts per million (ppm)", "Change in concentration per 5 minutes", "Change in concentration per (5 minutes)²", "Degrees celsius", "Relative humidity in %"),
+	units <- setNames(c("Parts per million (ppm)", "Change in concentration per second", "Change in concentration per second²", "Degrees celsius", "Relative humidity in %"),
 			  c("co2", "co2deriv", "co2deriv2", "temperature", "humidity")	)
 	pdff(file=filename, width=3, height=1.5)
 	lapply(dlply(histD, .(variable)), function (mltp) {
 		var <- unique(mltp$variable)
 		unitx <- units[names(units)==var]
-		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity") + theme_bw() +labs(x=unitx, y="Fraction in range") #+ scale_y_log10()
+		plt <- ggplot(data=mltp) + geom_bar(aes(fill=presence, x=mids, y=dens, width=incr*0.75), position="dodge", stat="identity") + theme_bw() +labs(x=unitx, y="Fraction") #+ scale_y_log10()
 		plt <- plt + theme(legend.position = "bottom", axis.title = element_text(size=7), axis.text = element_text(size=6), axis.ticks = element_line(size=0.2), axis.title.y = element_text(vjust=0.2), axis.title.x = element_text(vjust=0.15), axis.ticks.length = unit(0.1, "cm"), panel.border = element_rect(fill = NULL, colour = "black", size = 0.2) )
 		plt <- plt + guides(fill=FALSE)
 		print(plt)
@@ -258,6 +258,38 @@ plotHistOccupancy <- function(df) {
 	print(plt)
 	dev.off()
 }
+
+plotHistOccupancyPaper <- function(df) {
+	loc_ids <- c(11,12,16,14,47,45,46,44,60,62,61)
+	ids <- c(1,2,3,4,5,6,7,8,9,10,11)
+	names(loc_ids) <- as.character(ids)
+	df$loc_id <- sapply(df$loc_id, function(n) {
+		if(n %in% loc_ids) {
+			return(names(loc_ids)[loc_ids==n])
+		} else {
+			return(n)
+		}
+	})
+	presenceData <- df[df$unittypename == "presence" & df$reading == 1, ]
+	presenceData$durationInSec <- (presenceData$timestamp2 - presenceData$timestamp)
+	presenceData$durationInHours <- presenceData$durationInSec / 3600
+
+	pData <- ddply(presenceData, .(loc_id), function(x) c(median=median(x$durationInHours), mean=mean(x$durationInHours)) )
+	pData <- melt(pData, id.vars=c("loc_id"))
+	pData$loc_id <- as.numeric(as.character(pData$loc_id))
+	filename <- paste("occupancy_bar_chart.pdf", sep="")
+	pdff(file=filename, width=7, height=5)
+	plt <- ggplot(data = pData, aes(y=value, x=loc_id, fill=variable))
+	plt <- plt + geom_bar(stat="identity", color="black", size=0.15, width=0.3, position = position_dodge(width = 0.42))
+	plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.text = element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.9, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_text(vjust=-0.5) )
+	plt <- plt + labs(y="Occupancy duration [h]", x="Room Id")
+	plt <- plt + scale_x_continuous(breaks = ids)
+	plt <- plt + scale_y_continuous(expand = c(0,0))
+	print(plt)
+	dev.off()
+}
+
 
 plotSensorDataTable <- function(rD, nm, pD, dD, columnsToPlot, prefix) {
 	loc_id <- unique(dD$loc_id)

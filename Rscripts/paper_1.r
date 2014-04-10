@@ -9,6 +9,7 @@ deltaTime <- 300 # in seconds
 
 ## plot histograms for occupany data
 plotHistOccupancy(allDataRaw)
+plotHistOccupancyPaper(allDataRaw)
 
 prepareData <- function(dataPerRoomList) {
 	lapply(dataPerRoomList, FUN=function(df) {
