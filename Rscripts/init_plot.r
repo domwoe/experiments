@@ -1,5 +1,20 @@
 #!/usr/bin/env Rscript
 
+plotFeatureRanking <- function(featureRanking) {
+	pdff(file="featRank.pdf", width=8, height=6)
+	plt <- ggplot(data = featureRanking[featureRanking$loc_id %in% c(60,61,62), ],
+			aes(y=relMutualInfo, x=sensor, fill=sensor))
+	plt <- plt + geom_bar(stat="identity", color="black")
+	plt <- plt + facet_grid(loc_id~excludedQuant+nBins)
+	plt <- plt + guides(fill="none")
+	plt <- plt + theme(legend.position = "top", axis.title.x = element_blank(),
+			axis.text.x = element_text(hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
+
+
+
 plotSingleDay <- function(prediction, rawData, startD, endD) {
 	prediction$time <- as.POSIXct(prediction$timestamp, origin="1970-01-01")
 
@@ -49,7 +64,7 @@ plotScatterPlotContacts <- function(rasterDataPerRoom) {
 		cols <- intersect(colnames(df), c("presence", "windowcontact", "doorcontact"))
 		if(length(cols) > 2) { # we have a window and door contact sensor
 			ddf <- df[, c("timestamp", "co2", "co2deriv", "tempDeriv", "temperature", cols)]
-			ddf <- modifyList(ddf, lapply(ddf[, c("presence", "windowcontact", "doorcontact")], as.factor))
+			ddf <- modifyList(ddf, lapply(ddf[, c("presence", "windowcontact", "doorcontact")], function(x) as.factor(as.character(x)) ))
 			#print(str(ddf))
 			#plt <- ggplot(data=ddf, mapping=aes(x=sqrt(co2^2 + co2deriv^2), y=atan2(co2deriv,co2) ))
 			plt <- ggplot(data=ddf, mapping=aes(x=co2deriv, y=co2))
@@ -96,7 +111,8 @@ plotLossPaper <- function(lpR, filename, title="Loss") {
 	})
 	lpR <- melt(lpR, id.vars=c("metric"))
 	lpR$line <- as.numeric(as.numeric(as.character(lpR$variable)) >= 6)
-	#lpR$variable <- factor(as.character(lpR$variable))
+	lpR$variable <- as.numeric(as.character(lpR$variable))
+
 	pdff(file=filename, width=7, height=6.3)
 	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=metric))
 	plt <- plt + geom_bar(stat="identity", color="black", size=0.15, width=0.3, position = position_dodge(width = 0.42))
@@ -105,6 +121,8 @@ plotLossPaper <- function(lpR, filename, title="Loss") {
 	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.text = element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.9, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_text(vjust=-0.5) )
 	plt <- plt + labs(y="Metric Score", x="Room Id")
 	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
+	#plt <- plt + scale_x_continuous()
+	plt <- plt + scale_x_continuous(breaks = ids)
 	print(plt)
 	dev.off()
 }
@@ -115,7 +133,7 @@ plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
 	lpR$measure <- factor(rownames(lpR))
 	print(lpR)
 	lpR <- melt(lpR, id.vars=c("measure"))
-	lpR$variable <- factor(lpR$variable)
+	lpR$variable <- as.factor(as.character(lpR$variable))
 	#print(lpR)
 	pdff(file=filename, width=7, height=5)
 	plt <- ggplot(data = lpR, aes(y=value, x=variable, fill=measure))
@@ -131,7 +149,7 @@ plotLoss <- function(lpR, title="Loss", filename="binLossRate.pdf") {
 
 plotSensorHistogramsAntje <- function(ldf, columnsToPlot) {
 	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) )) #reassemble data frame
-	df$presence <- factor(df$presence)
+	df$presence <- factor(as.character(df$presence))
 	#print(df[df$presence!=1 & df$presence!=0, ])
 	stopifnot(all(df$presence==1 | df$presence==0))
 	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
@@ -179,7 +197,7 @@ plotSensorHistogramsAntje <- function(ldf, columnsToPlot) {
 
 plotSensorHistograms <- function(ldf, columnsToPlot) {
 	df <- rbind.fill(lapply(names(ldf), function(n) data.frame(loc_id=n, ldf[[n]]) )) #reassemble data frame
-	df$presence <- factor(df$presence)
+	df$presence <- factor(as.character(df$presence))
 	#print(df[df$presence!=1 & df$presence!=0, ])
 	stopifnot(all(df$presence==1 | df$presence==0))
 	mlt <- melt(df, id.vars=c("loc_id", "presence"), measure.vars=columnsToPlot)
