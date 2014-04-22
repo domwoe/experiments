@@ -13,7 +13,21 @@ plotFeatureRanking <- function(featureRanking) {
 	dev.off()
 }
 
-
+plotCorrelationMatrix <- function(corrdf, features) {
+	pdff(file="corrMat.pdf", width=5, height=5)
+	dat <- melt(corrdf[corrdf$loc_id %in% c(60,61,62), ], id.vars=c("loc_id", "feature") )
+	dat$variable <- factor(as.character(dat$variable), features)
+	dat$feature <- factor(as.character(dat$feature), rev(features))
+	print(str(dat))
+	plt <- ggplot(data = dat, aes(y=feature, x=variable, fill=value))
+	plt <- plt + geom_raster()
+	plt <- plt + facet_grid(loc_id~.)
+	plt <- plt + scale_fill_gradient2(low="red", mid="yellow", high="blue", limits=c(-1,1))
+	plt <- plt + theme(legend.position = "right", axis.title.x = element_blank(), axis.title.y = element_blank(),
+			axis.text.x = element_text(hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
 
 plotSingleDay <- function(prediction, rawData, startD, endD) {
 	prediction$time <- as.POSIXct(prediction$timestamp, origin="1970-01-01")
