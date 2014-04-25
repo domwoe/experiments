@@ -1,5 +1,22 @@
 #!/usr/bin/env Rscript
 
+plotPrinCompAnalysis <- function(princompAnalysis) {
+	pdff(file="prinComp.pdf", width=7, height=5)
+	tmp <- princompAnalysis[princompAnalysis$loc_id %in% c(60,61,62), ]
+	pVar <- setNames(tmp[tmp$feature == "ProportionOfVar", c("value", "loc_id", "variable")],
+				c("pVar", "loc_id", "variable"))
+	tmp <- merge(tmp[tmp$feature != "ProportionOfVar", ], pVar)
+	plt <- ggplot(data = tmp,
+			aes(y=value, x=feature, fill=feature))
+	plt <- plt + geom_bar(stat="identity", color="black")
+	plt <- plt + facet_grid(loc_id~variable)
+	plt <- plt + guides(fill="none")
+	plt <- plt + theme(legend.position = "top", axis.title.x = element_blank(),
+			axis.text.x = element_text(hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
+
 plotFeatureRanking <- function(featureRanking) {
 	pdff(file="featRank.pdf", width=8, height=6)
 	plt <- ggplot(data = featureRanking[featureRanking$loc_id %in% c(60,61,62), ],
@@ -18,7 +35,7 @@ plotCorrelationMatrix <- function(corrdf, features) {
 	dat <- melt(corrdf[corrdf$loc_id %in% c(60,61,62), ], id.vars=c("loc_id", "feature") )
 	dat$variable <- factor(as.character(dat$variable), features)
 	dat$feature <- factor(as.character(dat$feature), rev(features))
-	print(str(dat))
+	#print(str(dat))
 	plt <- ggplot(data = dat, aes(y=feature, x=variable, fill=value))
 	plt <- plt + geom_raster()
 	plt <- plt + facet_grid(loc_id~.)

@@ -43,6 +43,19 @@ getCorrelation <- function(data) {
 	})	
 }
 
+getPrinCompAnalysis <- function(data) {
+	ddply(data, .(loc_id), function(df) {
+		tmp <- scale(df[, features])
+		princompObj <- princomp(tmp)
+		vars <- princompObj$sdev^2
+		vars <- vars/sum(vars)
+		load <- unclass(princompObj$loadings)
+		load <- as.data.frame(rbind(load, ProportionOfVar=vars))
+		load$feature <- rownames(load)
+		ret <- melt(load, id.vars="feature")
+		return(ret)
+	})	
+}
 
 dataAug <- ddply(allDataRaw, c("loc_id"), function(df) {
 		sensorDataTable <- prepareDataForLocationTable(df, deltaTime)
@@ -56,6 +69,9 @@ dataAug <- ddply(allDataRaw, c("loc_id"), function(df) {
 
 corrdf <- getCorrelation(dataAug)
 plotCorrelationMatrix(corrdf, features)
+
+princompAnalysis <- getPrinCompAnalysis(dataAug)
+plotPrinCompAnalysis(princompAnalysis)
 
 args <- expand.grid(excludedQuant=c(0.00,0.02,0.04), nBins=c(20,30,50) )
 featureRanking <- mdply(args, getEntropyFeatureRanking, data=dataAug)
