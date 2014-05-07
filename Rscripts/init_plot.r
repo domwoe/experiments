@@ -2,15 +2,21 @@
 
 plotPrinCompAnalysis <- function(princompAnalysis) {
 	pdff(file="prinComp.pdf", width=7, height=5)
-	tmp <- princompAnalysis[princompAnalysis$loc_id %in% c(60,61,62), ]
-	pVar <- setNames(tmp[tmp$feature == "ProportionOfVar", c("value", "loc_id", "variable")],
-				c("pVar", "loc_id", "variable"))
-	tmp <- merge(tmp[tmp$feature != "ProportionOfVar", ], pVar)
-	plt <- ggplot(data = tmp,
+
+	#tmp <- princompAnalysis[princompAnalysis$loc_id %in% c(60,61,62), ]
+	#pVar <- setNames(tmp[tmp$feature == "ProportionOfVar", c("value", "loc_id", "variable")],
+				#c("pVar", "loc_id", "variable"))
+	#tmp <- merge(tmp[tmp$feature != "ProportionOfVar", ], pVar)
+
+	princompAnalysis <- princompAnalysis[princompAnalysis$loc_id %in% c(60,61,62), ]
+	plt <- ggplot(data = princompAnalysis[princompAnalysis$feature != "ProportionOfVar",],
 			aes(y=value, x=feature, fill=feature))
 	plt <- plt + geom_bar(stat="identity", color="black")
+	plt <- plt + geom_text(data = princompAnalysis[princompAnalysis$feature == "ProportionOfVar",],
+				mapping = aes(label=value), x=1, y=-0.8, size=2)
 	plt <- plt + facet_grid(loc_id~variable)
 	plt <- plt + guides(fill="none")
+	plt <- plt + scale_y_continuous(limits=c(-1,1))
 	plt <- plt + theme(legend.position = "top", axis.title.x = element_blank(),
 			axis.text.x = element_text(hjust=1, vjust=0.5, angle=90))
 	print(plt)
