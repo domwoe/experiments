@@ -3,8 +3,16 @@
 source("init_init.r")
 Sys.setenv(ScriptName = thisFile())
 
-
 deltaTime <- 300 # in seconds
+
+flattenList <- function(l) {
+	lts <- (sapply(l, class) == "list")
+	if(any(lts)) {
+		return( c(l[!lts], flattenList( do.call(c, l[lts]) ) ) )
+	} else {
+		return( l )
+	}
+}
 
 ma <- function(x, n=7) {
 	i <- n %/% 2
@@ -12,36 +20,21 @@ ma <- function(x, n=7) {
 	convolve(padded, rep(1/n,n), type = "filter")
 }
 
-
-## plot histograms for occupany data
-#plotHistOccupancy(allDataRaw)
-#plotHistOccupancyPaper(allDataRaw)
-
 prepareData <- function(dataPerRoomList) {
 	dataPerRoomList <- dataPerRoomList[names(dataPerRoomList) %in% c("60","61","62")]
 	lapply(dataPerRoomList, FUN=function(df) {
 		sensorDataTable <- prepareDataForLocationTable(df, deltaTime)
-		#add a new column containing first derivative for C0_2
 		sensorDataTable$co2deriv <- derivSpline(sensorDataTable$timestamp, sensorDataTable$co2, deriv=1)
 		sensorDataTable$co2deriv2 <- derivSpline(sensorDataTable$timestamp, sensorDataTable$co2, deriv=2)
 		sensorDataTable$avgCo2 <- ma(sensorDataTable$co2)
 		sensorDataTable$avgCo2deriv <- ma(sensorDataTable$co2deriv)
+		sensorDataTable$avgCo2deriv2 <- ma(sensorDataTable$co2deriv2)
 		return(sensorDataTable)
 	})
 }
 
-#plotSensorHistograms(prepareData(dlply(allDataRaw, c("loc_id"))), c("co2deriv", "co2", "temperature", "co2deriv2", "humidity"))
-
-#plotSensorHistogramsAntje(prepareData(dlply(allDataRaw, c("loc_id"))), c("co2", "co2deriv", "co2deriv2", "temperature", "humidity"))
-
 trainingData <- cutoffUnusedDays(allDataRaw, timeFrames, "trainingStartDate", "trainingStopDate")
 validationData <- cutoffUnusedDays(allDataRaw, timeFrames, "validationStartDate", "validationStopDate")
-
-## plot raw sensor data for each location:
-#d_ply(allDataRaw, c("loc_id"), function(df) plotLocation(df, "raw") )
-
-#d_ply(trainingData, c("loc_id"), function(df) plotLocation(df, "training_basis") )
-#d_ply(validationData, c("loc_id"), function(df) plotLocation(df, "validation_basis") )
 
 dataPerRoomTraining <- dlply(trainingData, c("loc_id"))
 dataPerRoomValidation <- dlply(validationData, c("loc_id"))
@@ -49,66 +42,45 @@ dataPerRoomValidation <- dlply(validationData, c("loc_id"))
 dataPerRoomTrainingAug <- prepareData(dataPerRoomTraining)
 dataPerRoomValidationAug <- prepareData(dataPerRoomValidation)
 
-cat("Train model:\n")
-modelPerRoom <- lapply(dataPerRoomTrainingAug, FUN=function(df) {
-	# pass data to to model and specify which sensors to use for prediction
-	simpleMarkovModel <- SimpleMarkov(sensorData=df, sensors=c("co2", "co2deriv", "co2deriv2"))
-	return(simpleMarkovModel)
-})
-nm <- names(modelPerRoom)
-modelPerRoomAvg <- lapply(dataPerRoomTrainingAug, FUN=function(df) {
-	# pass data to to model and specify which sensors to use for prediction
-	simpleMarkovModel <- SimpleMarkov(sensorData=df, sensors=c("avgCo2", "avgCo2deriv"))
-	return(simpleMarkovModel)
-})
-modelPerRoom <- c(modelPerRoom, modelPerRoomAvg)
-nm_new <- c(nm, paste(nm, "avg", sep=""))
-names(modelPerRoom) <- nm_new
+cat("Train models.\n")
+sensorCombinations <- list(
+				c("co2", "co2deriv"),
+				c("co2", "co2deriv", "co2deriv2"),
+				c("avgCo2", "avgCo2deriv"),
+				c("avgCo2", "avgCo2deriv", "avgCo2deriv2")
+			)
+#names(sensorCombinations) <-  lapply(sensorCombinations, function(f) paste(f, collapse="-") )
 
+
+models <- mapply(FUN=function(df, loc_id) {
+	l <- list(
+			# define configurations for which classification has to be run:
+			lapply(sensorCombinations, function(s) {
+				RunConf(model=SimpleMarkov(sensorData=df, sensors=s),
+					sensorFeat=s, loc_id=loc_id) }),
+			RunConf(model=alwaysUnoccupied(), loc_id=loc_id),
+			RunConf(model=alwaysOccupied(), loc_id=loc_id)
+		)
+	return(l)
+}, dataPerRoomTrainingAug, names(dataPerRoomTrainingAug), SIMPLIFY=FALSE)
+models <- flattenList(models)
+#classes <- unique(rapply(models, class, how="unlist"))
 
 cat("Make predictions.\n")
-predictionPerRoomValidation <- mapply(function(model, validation) {
-	pred <- predictFromModel(model, newSensorData=validation)
-	return(data.frame(timestamp=validation$timestamp, presence=pred))
-}, modelPerRoom, dataPerRoomValidationAug, SIMPLIFY=FALSE)
-
-predictionPerRoomTraining <- mapply(function(model, training) {
-	pred <- predictFromModel(model, newSensorData=training)
-	return(data.frame(timestamp=training$timestamp, presence=pred))
-}, modelPerRoom, dataPerRoomTrainingAug, SIMPLIFY=FALSE)
-
-
-cat("Calculate metrics.\n")
-lossPerRoomValidation <- mapply(function(validation, prediction) {
-	lossMetrics(validation$presence, prediction$presence)
-}, setNames(rep(dataPerRoomValidationAug,2), nm_new), predictionPerRoomValidation)
-plotLoss(lossPerRoomValidation, title="Metrics Validation", filename="validationMetrics.pdf")
+models <- lapply(models, function(m) {
+	m$trainingPred <- predictFromModel(m$model, newSensorData=dataPerRoomTrainingAug[[m$loc_id]])
+	m$validationPred <- predictFromModel(m$model, newSensorData=dataPerRoomValidationAug[[m$loc_id]])
+	
+	m$trainingMetrics <- lossMetrics(dataPerRoomTrainingAug[[m$loc_id]]$presence, m$trainingPred)
+	m$validationMetrics <- lossMetrics(dataPerRoomValidationAug[[m$loc_id]]$presence, m$validationPred)
+	return(m)
+})
 
 
-lossPerRoomTraining <- mapply(function(validation, prediction) {
-	lossMetrics(validation$presence, prediction$presence)
-}, setNames(rep(dataPerRoomTrainingAug,2), nm_new), predictionPerRoomTraining)
-plotLoss(lossPerRoomTraining, title="Metrics Training", filename="trainingMetrics.pdf")
-
-
-#cat("Generating plots...\n")
-#columnsToPlot <- c("co2deriv", "co2", "co2deriv2", "presence")
-
-#plotSingleDayPaperAntjeBad(dataPerRoomValidationAug, predictionPerRoomValidation, dataPerRoomValidation)
-
-
-
-#mapply(function(rD, nm, pD, dD) plotSensorDataTable(rD, nm, pD, dD, columnsToPlot, prefix="training"),
-#						dataPerRoomTrainingAug,
-#						names(dataPerRoomTrainingAug),
-#						predictionPerRoomTraining,
-#						dataPerRoomTraining )
-#mapply(function(rD, nm, pD, dD) plotSensorDataTable(rD, nm, pD, dD, columnsToPlot, prefix="validation"),
-#						dataPerRoomValidationAug,
-#						names(dataPerRoomValidationAug),
-#						predictionPerRoomValidation,
-#						dataPerRoomValidation )
-
+lossMatrix <- rbind.fill(data.frame(dataset="training", ldply(models, function(m) m$trainingMetrics)))
+lossMatrix <- rbind(lossMatrix,
+		   rbind.fill(data.frame(dataset="validation", ldply(models, function(m) m$validationMetrics))))
+print(lossMatrix)
 
 cat("\n\ndone.\n")
 

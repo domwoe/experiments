@@ -1,9 +1,15 @@
 #!/usr/bin/env Rscript
 
-.Model <- setClass("Model", representation(sensorData="data.frame", sensors="character"))
+.RunConf <- setClass("RunConf", contains="list")
 
-Model <- function(sensorData=data.frame(), sensors=character(), ...) {
-    new("Model", sensorData=sensorData, sensors=sensors, ...)
+RunConf <- function(model, loc_id, ...) {
+    new("RunConf", list(model=model, loc_id=loc_id, ...))
+}
+
+.Model <- setClass("Model", representation(sensorData="data.frame", sensors="character", internalModel="ANY"))
+
+Model <- function(sensorData=data.frame(), sensors=character(), internalModel, ...) {
+    new("Model", sensorData=sensorData, sensors=sensors, internalModel=internalModel, ...)
 }
 
 setGeneric("predictFromModel", function(object, newSensorData) {
@@ -17,7 +23,7 @@ setMethod("predictFromModel", signature("Model", "data.frame"), function(object,
 
 
 
-.SimpleMarkov <- setClass("SimpleMarkov", contains="Model", representation(steps="numeric", model="ANY"))
+.SimpleMarkov <- setClass("SimpleMarkov", contains="Model")
 
 SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	l <- length(sensorData$presence)
@@ -46,7 +52,7 @@ SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	attr(sigmaEstimate,"split_labels") <- NULL
 	b <- list(mu=meanEstimate,sigma=sigmaEstimate)
 	hmmmodel <- hmmspec(init=initV, trans=pMat, parms.emission=b, dens.emission=dmvnorm.hsmm)
-	new("SimpleMarkov", Model(sensorData, sensors), model=hmmmodel, ...)
+	new("SimpleMarkov", Model(sensorData, sensors, hmmmodel), ...)
 }
 
 setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(object, newSensorData) {
@@ -59,7 +65,7 @@ setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(
 	newDat <- newSensorData[, colnames(newSensorData) %in% object@sensors]
 	newDat <- as.matrix(newDat)
 	# we have to create a list first before handing data to predict to avoid warnings and other stuff
-	prediction <- predict.hmmspec(object@model,newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")
+	prediction <- predict.hmmspec(object@internalModel,newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")
 	#prediction <- predict.hmmspec(object@model,newdata=newDat,method="smoothed")
 	#print(str(prediction))
 	predictionNormalized <- prediction$s -1
@@ -67,6 +73,23 @@ setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(
 })
 
 
+
+.alwaysOccupied <- setClass("alwaysOccupied", contains="Model")
+alwaysOccupied  <- function(sensorData=data.frame(), sensors=character(), ...) {
+	new("alwaysOccupied", Model(sensorData, sensors, NA), ...)
+}
+setMethod("predictFromModel", signature("alwaysOccupied", "data.frame"), function(object, newSensorData) {
+	return( rep(1, nrow(newSensorData)) )
+})
+
+
+.alwaysUnoccupied <- setClass("alwaysUnoccupied", contains="Model")
+alwaysUnoccupied  <- function(sensorData=data.frame(), sensors=character(), ...) {
+	new("alwaysUnoccupied", Model(sensorData, sensors, NA), ...)
+}
+setMethod("predictFromModel", signature("alwaysUnoccupied", "data.frame"), function(object, newSensorData) {
+	return( rep(0, nrow(newSensorData)) )
+})
 
 
 
