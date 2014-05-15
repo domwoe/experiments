@@ -7,6 +7,10 @@ meanBinaryLoss <- function(vec1, vec2) {
 }
 
 lossMetrics <- function(truth, prediction) {
+	if(is.null(prediction)) {
+		return(NULL)
+	}
+	stopifnot(length(truth) == length(prediction))
 	#binLoss <- meanBinaryLoss(truth, prediction)
 	p <- sum(truth == 1)
 	n <- sum(truth == 0)
@@ -14,7 +18,7 @@ lossMetrics <- function(truth, prediction) {
 	tn <- sum(truth == 0 & prediction == 0)
 	fp <- sum(truth == 0 & prediction == 1)
 	fn <- sum(truth == 1 & prediction == 0)
-	c(Sensitivity=tp/p, Specificity=tn/n, Precision=tp/(tp+fp), Accuracy=(tp+tn)/(p+n),
+	data.frame(Sensitivity=tp/p, Specificity=tn/n, Precision=tp/(tp+fp), Accuracy=(tp+tn)/(p+n),
 	  F1score=2*tp/(2*tp + fp + fn) )
 }
 

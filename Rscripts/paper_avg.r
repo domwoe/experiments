@@ -33,12 +33,15 @@ prepareData <- function(dataPerRoomList) {
 	})
 }
 
+entireData <- cutoffUnusedDays(allDataRaw, timeFrames, "trainingStartDate", "validationStopDate")
 trainingData <- cutoffUnusedDays(allDataRaw, timeFrames, "trainingStartDate", "trainingStopDate")
 validationData <- cutoffUnusedDays(allDataRaw, timeFrames, "validationStartDate", "validationStopDate")
 
+dataPerRoomEntire <- dlply(entireData, c("loc_id"))
 dataPerRoomTraining <- dlply(trainingData, c("loc_id"))
 dataPerRoomValidation <- dlply(validationData, c("loc_id"))
 
+dataPerRoomEntireAug <- prepareData(dataPerRoomEntire)
 dataPerRoomTrainingAug <- prepareData(dataPerRoomTraining)
 dataPerRoomValidationAug <- prepareData(dataPerRoomValidation)
 
@@ -49,8 +52,6 @@ sensorCombinations <- list(
 				c("avgCo2", "avgCo2deriv"),
 				c("avgCo2", "avgCo2deriv", "avgCo2deriv2")
 			)
-#names(sensorCombinations) <-  lapply(sensorCombinations, function(f) paste(f, collapse="-") )
-
 
 models <- mapply(FUN=function(df, loc_id) {
 	l <- list(
@@ -58,29 +59,36 @@ models <- mapply(FUN=function(df, loc_id) {
 			lapply(sensorCombinations, function(s) {
 				RunConf(model=SimpleMarkov(sensorData=df, sensors=s),
 					sensorFeat=s, loc_id=loc_id) }),
+			lapply(sensorCombinations, function(s) {
+				RunConf(model=ConditionalMarkov(sensorData=df, sensors=s),
+					sensorFeat=s, loc_id=loc_id) }),
 			RunConf(model=alwaysUnoccupied(), loc_id=loc_id),
 			RunConf(model=alwaysOccupied(), loc_id=loc_id)
 		)
 	return(l)
 }, dataPerRoomTrainingAug, names(dataPerRoomTrainingAug), SIMPLIFY=FALSE)
 models <- flattenList(models)
-#classes <- unique(rapply(models, class, how="unlist"))
 
 cat("Make predictions.\n")
 models <- lapply(models, function(m) {
 	m$trainingPred <- predictFromModel(m$model, newSensorData=dataPerRoomTrainingAug[[m$loc_id]])
 	m$validationPred <- predictFromModel(m$model, newSensorData=dataPerRoomValidationAug[[m$loc_id]])
+	m$unsupervisedPred <- predictUnsupervised(m$model, newSensorData=dataPerRoomEntireAug[[m$loc_id]])
 	
 	m$trainingMetrics <- lossMetrics(dataPerRoomTrainingAug[[m$loc_id]]$presence, m$trainingPred)
 	m$validationMetrics <- lossMetrics(dataPerRoomValidationAug[[m$loc_id]]$presence, m$validationPred)
+	m$unsupervisedMetrics <- lossMetrics(dataPerRoomEntireAug[[m$loc_id]]$presence, m$unsupervisedPred)
 	return(m)
 })
 
 
-lossMatrix <- rbind.fill(data.frame(dataset="training", ldply(models, function(m) m$trainingMetrics)))
-lossMatrix <- rbind(lossMatrix,
-		   rbind.fill(data.frame(dataset="validation", ldply(models, function(m) m$validationMetrics))))
-print(lossMatrix)
+lossMatrixTraining <- data.frame(dataset="training", extractCombine(models, "trainingMetrics"))
+lossMatrixValidation <- data.frame(dataset="validation", extractCombine(models, "validationMetrics"))
+lossMatrixUnsupervised <- data.frame(dataset="unsupervised", extractCombine(models, "unsupervisedMetrics"))
+
+plotLossMatrix(lossMatrixTraining, filename="lossMatTraining.pdf")
+plotLossMatrix(lossMatrixValidation, filename="lossMatValidation.pdf")
+plotLossMatrix(lossMatrixUnsupervised, filename="lossMatUnsupervised.pdf")
 
 cat("\n\ndone.\n")
 
