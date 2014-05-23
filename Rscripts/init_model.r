@@ -13,13 +13,23 @@ getIdVec <- function(rc) {
 	return(ret)
 }
 
-extractCombine <- function(rcList, bindAttr) {
+extractCombine <- function(rcList, bindAttr, transpose=FALSE) {
 	dtf <- ldply(rcList, function(m) {
 			idv <- getIdVec(m)
 			if(!any(names(m) == bindAttr)) {
 				return(NULL)
 			}
-			ret <- data.frame(idv, m[names(m) == bindAttr][[1]] )
+			retV <- m[names(m) == bindAttr][[1]]
+			if(transpose) {
+				#print(idv)
+				#print(length(retV))
+				retV <- setNames(retV, NULL)
+				retV <- t(data.frame(retV))
+			} else {
+				retV <- data.frame(retV)
+			}
+
+			ret <- data.frame(idv, retV)
 			return(ret)
 		})
 }
@@ -61,7 +71,7 @@ setMethod("predictUnsupervised", signature("Model", "data.frame"), function(obje
 SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	l <- length(sensorData$presence)
 	#print(l)
-	digr <- data.frame(first=sensorData$presence,second=sensorData$presence[c(2:l,l)])
+	digr <- data.frame(first=sensorData$presence,second=sensorData$presence[c(2:l,l)]) # hmmm... double check this.... indices 1:(l-1) and 2:l maybe?
 	pMat <- as.matrix(table(digr))
 	pMat <- pMat/rowSums(pMat)
 	initC <- as.vector(table(sensorData$presence))
@@ -74,7 +84,7 @@ SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	attr(meanEstimate,"split_type") <- NULL
 	attr(meanEstimate,"split_labels") <- NULL
 	sigmaEstimate <- dlply(sensorData, .(presence), function(df) {
-		v <- var(df[, colnames(df) %in% sensors]) # extract variances from co-variance matrix
+		v <- var(df[, colnames(df) %in% sensors]) 
 		#v <- sqrt(v) # compute standard devitaion from variance // mhsmm needs variance!
 		#d <- diag(x=v) # create diagonal matrix
 		#colnames(d) <- names(v)
@@ -83,6 +93,8 @@ SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
 	})
 	attr(sigmaEstimate,"split_type") <- NULL
 	attr(sigmaEstimate,"split_labels") <- NULL
+	stopifnot(length(meanEstimate) > 1)
+	stopifnot(length(sigmaEstimate) > 1)
 	b <- list(mu=meanEstimate,sigma=sigmaEstimate)
 	hmmmodel <- hmmspec(init=initV, trans=pMat, parms.emission=b, dens.emission=dmvnorm.hsmm)
 	new("SimpleMarkov", Model(sensorData, sensors, hmmmodel), ...)
@@ -95,11 +107,13 @@ setMethod("predictFromModel", signature("SimpleMarkov", "data.frame"), function(
 	#print(names(train))
 	#print(train)
 	#stop()
-	# are they normalized ?
+	#
 	newDat <- newSensorData[, colnames(newSensorData) %in% object@sensors]
 	newDat <- as.matrix(newDat)
 	# we have to create a list first before handing data to predict to avoid warnings and other stuff
 	prediction <- predict.hmmspec(object@internalModel,newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")
+	#print(exp(prediction$loglik))
+	#stop()
 	#prediction <- predict.hmmspec(object@model,newdata=newDat,method="smoothed")
 	#print(str(prediction))
 	predictionNormalized <- prediction$s -1
@@ -162,19 +176,135 @@ setMethod("predictUnsupervised", signature("alwaysUnoccupied", "data.frame"), fu
 
 
 
-.ConditionalMarkov <- setClass("ConditionalMarkov", contains="Model")
+.ConditionalMarkov <- setClass("ConditionalMarkov", contains="Model", representation(b="list", initV="vector"))
 
 ConditionalMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {
+	sensorData$hour <- (as.POSIXlt(sensorData$timestamp, origin="1970-01-01")$hour)
+	#print(head(sensorData))
 
-	new("ConditionalMarkov", Model(sensorData, sensors, NA), ...)
+	initC <- as.vector(table(sensorData$presence))
+	initV <- initC/sum(initC)
+
+	meanEstimate <- dlply(sensorData, .(presence), function(df) {
+		cM <- colMeans(df[, colnames(df) %in% sensors])
+		vec <- as.vector(cM)
+		return(vec)
+	})
+
+	sigmaEstimate <- dlply(sensorData, .(presence), function(df) {
+		v <- var(df[, colnames(df) %in% sensors]) 
+		return(v)
+	})
+
+	internalTransitionMats <- dlply(sensorData, .(hour), function(df) {
+		#print(unique(df$hour))
+		l <- nrow(df)
+		digr <- data.frame(first=df$presence[1:(l-1)], second=df$presence[2:l])
+		digr <- rbind(digr, c(1, 1), c(0, 1), c(1, 0), c(0, 0))
+		pMat <- as.matrix(table(digr))
+		#print(pMat)
+		pMat <- pMat/rowSums(pMat)
+		#print(pMat)
+		#stop()	
+	})
+
+	b <- list(mu=meanEstimate, sigma=sigmaEstimate)
+	new("ConditionalMarkov", Model(sensorData, sensors, internalTransitionMats), b=b, initV=initV, ...)
 }
 
 setMethod("predictFromModel", signature("ConditionalMarkov", "data.frame"), function(object, newSensorData) {
-	return(NULL)
+	#print(head(newSensorData))
+	#print(object@sensors)
+	#print(object@initV)
+	#print(object@b)
+	posdate <- as.POSIXlt(newSensorData$timestamp, origin="1970-01-01")
+	newSensorData$hour <- posdate$hour
+	newSensorData$day <- posdate$year * 366 + posdate$yday # compute unique day identifier (since 1900)
+	# check for single row dfs:
+	newSensorData <- ddply(newSensorData, .(day, hour), function(df) {
+		if(nrow(df) == 1) {
+			df[df$hour == 0, "day"] <- df[df$hour == 0, "day"] -1
+			df$hour <- (df$hour -1) %% 24
+			#print(df)
+		}
+		return(df)
+	})
+	predList <- dlply(newSensorData, .(day, hour), function(df) {
+		h <- as.character(unique(df$hour))
+		#day <- as.character(unique(df$day))
+		#print(paste(h, day, sep=" : "))
+		pMat <- (object@internalModel)[[h]]
+		newDat <- df[, colnames(df) %in% object@sensors]
+		newDat <- as.matrix(newDat)
+		#print(nrow(newDat))
+		#print(newDat)
+		#print(df)
+		hmmmodel <- hmmspec(init=object@initV,
+					trans=pMat,
+					parms.emission=object@b,
+					dens.emission=dmvnorm.hsmm)
+		prediction <- predict.hmmspec(hmmmodel,
+					      newdata=list(s=NA,x=newDat,N=nrow(newDat)),method="viterbi")
+			#print(names(hmmmodel))
+			#print((prediction$s))
+			#loglik <- prediction$loglik
+			#lastF <- newDat[nrow(newDat), ]
+
+			# todo. what if argument of logarithm becomes zero
+			#lastS <- prediction$s[length(prediction$s)]
+			#lastSlogProb <- log(dmvnorm(lastF, mean = object@b$mu[[lastS]],
+			#				sigma = object@b$sigma[[lastS]]))
+
+			#lastSother <- (lastS-2)*(-1) + 1
+			#lastSlogProbOther <- log(dmvnorm(lastF, mean = object@b$mu[[lastSother]],
+			#				sigma = object@b$sigma[[lastSother]]))
+			#SecondLastS <- prediction$s[length(prediction$s)-1]
+			#print(lastSlogProb)
+			#print(lastS)
+			#print(lastSother)
+			#print(lastSlogProbOther)
+
+			#print(SecondLastS)
+			#stop()
+		predictionNormalized <- prediction$s -1
+		return(predictionNormalized)
+	})
+	predREt <- do.call(c, predList)
+	return(predREt)
 })
 
 
 setMethod("predictUnsupervised", signature("ConditionalMarkov", "data.frame"), function(object, newSensorData) {
+	#posdate <- as.POSIXlt(newSensorData$timestamp, origin="1970-01-01")
+	#newSensorData$hour <- posdate$hour
+	#print(head(newSensorData))
+
+	#responseFormula = as.formula( paste(paste(object@sensors, collapse="+"),"~1", sep="") )
+	#print(responseFormula)
+
+	#sdf <- as.matrix(newSensorData[, colnames(newSensorData) %in% object@sensors])
+	#print(head(sdf))
+	#rModels <- list(
+	#	list(
+	#		# why is it not possible to enter a formula as in the 1D case. this is stupid..
+	#		MVNresponse(sdf~1)
+	#		#MVNresponse(formula=responseFormula,data=newSensorData)
+	#	),
+	#	list(
+	#		MVNresponse(sdf~1,ps=c(1,1,1,1,1))
+	#		#MVNresponse(formula=responseFormula,data=newSensorData)
+	#	)
+	#)
+	#transition <- list()
+	#transition[[1]] <- transInit(~hour,nstates=2,data=newSensorData)
+	#transition[[2]] <- transInit(~hour,nstates=2,data=newSensorData)
+
+	#instart=runif(2)
+     	#inMod <- transInit(~1,ns=2,ps=instart,data=data.frame(1),family=multinomial("identity"))
+	#inMod <- transInit(~1,nstates=2,data=data.frame(rep(1,1)),family=multinomial("identity"))
+	#mod <- makeDepmix(response=rModels,transition=transition,homogeneous=FALSE,prior=inMod,ntimes=c(nrow(newSensorData)))
+	#fmod <- fit(mod)
+
 	return(NULL)
 })
 

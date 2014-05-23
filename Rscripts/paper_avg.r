@@ -14,10 +14,16 @@ flattenList <- function(l) {
 	}
 }
 
-ma <- function(x, n=7) {
+ma <- function(x, n=9) { # n must be odd
 	i <- n %/% 2
 	padded <- c(rep(x[1],i), x, rep(x[length(x)],i))
-	convolve(padded, rep(1/n,n), type = "filter")
+	ret <- convolve(padded, rep(1/n,n), type = "filter")
+	stopifnot(length(ret) == length(x))
+	return(ret)
+}
+
+ewma <- function(x, alpha=0.5) {
+
 }
 
 prepareData <- function(dataPerRoomList) {
@@ -81,14 +87,46 @@ models <- lapply(models, function(m) {
 	return(m)
 })
 
+#predMatrixTraining <- data.frame(dataset="training", extractCombine(models, "trainingPred", transpose=TRUE))
+#print(head(predMatrixTraining))
 
 lossMatrixTraining <- data.frame(dataset="training", extractCombine(models, "trainingMetrics"))
 lossMatrixValidation <- data.frame(dataset="validation", extractCombine(models, "validationMetrics"))
 lossMatrixUnsupervised <- data.frame(dataset="unsupervised", extractCombine(models, "unsupervisedMetrics"))
 
+#print(head(lossMatrixTraining))
+
 plotLossMatrix(lossMatrixTraining, filename="lossMatTraining.pdf")
 plotLossMatrix(lossMatrixValidation, filename="lossMatValidation.pdf")
 plotLossMatrix(lossMatrixUnsupervised, filename="lossMatUnsupervised.pdf")
+
+cat("Plot time series.\n")
+# plot all time series
+lapply(models, function(m) {
+	plotTSforRC(	"t", m$loc_id,
+			class(m$model),
+			m$sensorFeat,
+			dataPerRoomTrainingAug[[m$loc_id]],
+			dataPerRoomTraining[[m$loc_id]],
+			m$trainingPred
+		   )
+	plotTSforRC(	"v", m$loc_id,
+			class(m$model),
+			m$sensorFeat,
+			dataPerRoomValidationAug[[m$loc_id]],
+			dataPerRoomValidation[[m$loc_id]],
+			m$validationPred
+		   )
+	plotTSforRC(	"u", m$loc_id,
+			class(m$model),
+			m$sensorFeat,
+			dataPerRoomEntireAug[[m$loc_id]],
+			dataPerRoomEntire[[m$loc_id]],
+			m$unsupervisedPred
+		   )		
+})
+
+
 
 cat("\n\ndone.\n")
 

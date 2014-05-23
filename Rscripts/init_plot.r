@@ -489,3 +489,60 @@ plotLocation <- function(df, filePrefix) {
 }
 
 
+plotTSforRC <- function(prefix, location_id, modelName, sensorFeat, dataAug, dataRaw, prediction) {
+	if(modelName %in% c("alwaysOccupied", "alwaysUnoccupied")) return(NULL)
+	if(is.null(prediction) || length(prediction) < 1) return(NULL)
+
+	dataAug$prediction <- prediction
+	#print(head(dataAug))
+	#print(head(dataRaw))
+	loc_displayname <- unique(dataRaw$loc_displayname)
+	filename <- paste(prefix, "_", location_id, "_", modelName, "_", paste(sensorFeat, collapse="-"), ".pdf", sep="")
+
+	pdff(file=filename, width=8, height=4)
+
+	mlt <- melt(dataAug, id.vars=c("timestamp"), measure.vars=c(sensorFeat, "prediction"))
+	mlt$time <- as.POSIXct(mlt$timestamp, origin="1970-01-01")
+	mlt$timestamp <- NULL
+
+	#print(head(mlt))
+
+	startTimestamp <- min(mlt$time)
+	stopTimestamp <- max(mlt$time)
+
+	presenceLayer <- dataRaw[dataRaw$unittypename=="presence", ]
+	presenceLayer <- rbind.fill(lapply(c("prediction"), function(x) data.frame(presenceLayer, variable=x)))
+	presenceLayer$time1 <- as.POSIXct(presenceLayer$timestamp, origin="1970-01-01")
+	presenceLayer$time2 <- as.POSIXct(presenceLayer$timestamp2, origin="1970-01-01")
+
+	startDateDay <- as.POSIXlt(startTimestamp, origin="1970-01-01")
+	#startDateDay$mday <- startDateDay$mday -1
+	startDateDay$hour = 0
+
+	endDateDay <- startDateDay
+	endDateDay$mday <- endDateDay$mday + 1
+	#endDateDay$hour <- endDateDay$hour + 4
+
+	while(stopTimestamp > startDateDay)
+	{
+		#mltPart <- mlt[mlt$time >= startDateDay & mlt$time <= endDateDay, ]
+		plt <- ggplot(data = mlt)
+		plt <- plt + geom_rect(data=presenceLayer, mapping = aes(xmin = time1, xmax = time2, ymin = -Inf, ymax = Inf*((reading*2)-1)), fill="green", color=NA, alpha=0.6)
+		plt <- plt + geom_step(data = mlt, mapping=aes(x=time, y=value), color="brown", size=0.35)
+		plt <- plt + facet_grid(variable~.,scales="free_y")
+		plt <- plt + scale_x_datetime(labels = date_format("%d/%m %H:%M"), expand = c(0,0), limits = c(as.POSIXct(startDateDay), as.POSIXct(endDateDay)))
+		plt <- plt + theme_bw()
+		plt <- plt + theme(legend.position = "top", legend.title=element_blank(), panel.margin = unit(0.3, "cm"), strip.text.y = element_text(size = 8), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank())
+		plt <- plt + guides(color="none")
+		plotDate <- startDateDay
+		plotDate$hour <- plotDate$hour + 6
+		plt <- plt + labs(title = paste(loc_displayname, ":", location_id, ":", format(plotDate, "%Y-%m-%d")), x = "", y = "Value")
+		print(plt)
+
+		startDateDay$mday <- startDateDay$mday + 1
+		endDateDay$mday <- endDateDay$mday + 1
+	}
+
+	dev.off()
+}
+
