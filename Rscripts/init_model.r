@@ -311,6 +311,65 @@ setMethod("predictUnsupervised", signature("ConditionalMarkov", "data.frame"), f
 
 
 
+.SVM <- setClass("SVM", contains="Model")
+
+SVM  <- function(sensorData=data.frame(), sensors=character(), ...) {
+	sensorDatMat <- as.matrix(sensorData[, colnames(sensorData) %in% sensors])
+	classVec <- as.factor(sensorData$presence)
+	tbl <- table(classVec)
+	w <- setNames(as.vector(tbl), names(tbl))
+	w <- w/sum(w)
+	svmObj <- ksvm(x=sensorDatMat, y=classVec, class.weights = w)
+	new("SVM", Model(sensorData, sensors, svmObj), ...)
+}
+
+setMethod("predictFromModel", signature("SVM", "data.frame"), function(object, newSensorData) {
+	newSensorDatMat <- as.matrix(newSensorData[, colnames(newSensorData) %in% object@sensors])
+	pred <- predict(object@internalModel, newSensorDatMat, type="response")
+	as.numeric(as.character(pred))
+})
+
+
+setMethod("predictUnsupervised", signature("SVM", "data.frame"), function(object, newSensorData) {
+	return(NULL)
+})
+
+createWindows <- function(df, windowSize) {
+	vvv <- c(rep(1, windowSize %/% 2), 1:nrow(df), rep(nrow(df), windowSize %/% 2))
+	dfs <- lapply(df, function(col) {
+		l <- lapply(0:(windowSize-1), function(offset) col[ vvv[offset+(1:nrow(df))] ])
+		names(l) <- paste("p", 0:(windowSize-1), sep="")
+		l
+	})
+	dfa <- data.frame(dfs)
+}
+
+
+.SVMwindowed <- setClass("SVMwindowed", contains="Model", representation(windowSize="numeric"))
+
+SVMwindowed  <- function(sensorData=data.frame(), sensors=character(), windowSize=5, ...) {
+	df <- sensorData[, colnames(sensorData) %in% sensors]
+	sensorDatMat <- as.matrix(createWindows(df, windowSize))
+	classVec <- as.factor(sensorData$presence)
+	tbl <- table(classVec)
+	w <- setNames(as.vector(tbl), names(tbl))
+	w <- w/sum(w)
+	svmObj <- ksvm(x=sensorDatMat, y=classVec, class.weights = w)
+	new("SVMwindowed", Model(sensorData, sensors, svmObj), windowSize=windowSize, ...)
+}
+
+setMethod("predictFromModel", signature("SVMwindowed", "data.frame"), function(object, newSensorData) {
+	df <- newSensorData[, colnames(newSensorData) %in% object@sensors]
+	newSensorDatMat <- as.matrix(createWindows(df, object@windowSize))
+	pred <- predict(object@internalModel, newSensorDatMat, type="response")
+	as.numeric(as.character(pred))
+})
+
+
+setMethod("predictUnsupervised", signature("SVMwindowed", "data.frame"), function(object, newSensorData) {
+	return(NULL)
+})
+
 
 
 

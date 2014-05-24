@@ -14,6 +14,7 @@ derivSpline <- function(timestamps, vec, deriv=1) {
 	#splineF <- sm.spline(timestamps, vec)
 	splineF <- smooth.Pspline(x=timestamps, y=vec, norder=3, method=3) # we need order 3 according to descr
 	newV <- predict(splineF, xarg=timestamps, nderiv = deriv)
+	newV <- as.numeric(newV)
 	return(newV)
 }
 

@@ -63,6 +63,12 @@ models <- mapply(FUN=function(df, loc_id) {
 	l <- list(
 			# define configurations for which classification has to be run:
 			lapply(sensorCombinations, function(s) {
+				RunConf(model=SVMwindowed(sensorData=df, sensors=s),
+					sensorFeat=s, loc_id=loc_id) }),
+			lapply(sensorCombinations, function(s) {
+				RunConf(model=SVM(sensorData=df, sensors=s),
+					sensorFeat=s, loc_id=loc_id) }),
+			lapply(sensorCombinations, function(s) {
 				RunConf(model=SimpleMarkov(sensorData=df, sensors=s),
 					sensorFeat=s, loc_id=loc_id) }),
 			lapply(sensorCombinations, function(s) {
