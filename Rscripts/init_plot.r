@@ -1,5 +1,24 @@
 #!/usr/bin/env Rscript
 
+plotLossMatrixBEST <- function(lossMat, filename) {
+	pdff(file=filename, width=7, height=7)
+	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+	#plt <- ggplot(data = lM[regexpr("always", lM$model) == -1, ],
+	plt <- ggplot(data = lM,
+			aes(y=value, x=variable, fill=variable))
+	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), 				color="black", size=0.2)
+	plt <- plt + facet_grid(model~sensorFeat+loc_id)
+	plt <- plt + guides(fill="none")
+	plt <- plt + theme_bw()
+	plt <- plt + theme(legend.position = "top", axis.title.y = element_blank(),
+			axis.title.x = element_blank(),
+			strip.text.x = element_text(size=6),
+			strip.text.y = element_text(size=6),
+			axis.text.x = element_text(size=8, hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
+
 plotLossMatrix <- function(lossMat, filename) {
 	pdff(file=filename, width=7, height=7)
 	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
