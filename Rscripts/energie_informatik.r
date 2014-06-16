@@ -22,6 +22,10 @@ ma <- function(x, n=9) { # n must be odd
 	return(ret)
 }
 
+ewma <- function(x, alpha=0.5) {
+
+}
+
 prepareData <- function(dataPerRoomList) {
 	dataPerRoomList <- dataPerRoomList[names(dataPerRoomList) %in% c("60","61","62")]
 	lapply(dataPerRoomList, FUN=function(df) {
@@ -55,16 +59,9 @@ sensorCombinations[["62"]] <- c("co2", "avgCo2")
 
 models <- mapply(FUN=function(df, loc_id) {
 	l <- list(
-		RunConf(model=SVMwindowed(sensorData=df, sensors=sensorCombinations[[loc_id]]),
-					sensorFeat=sensorCombinations[[loc_id]], loc_id=loc_id),
-
-		RunConf(model=SVM(sensorData=df, sensors=sensorCombinations[[loc_id]]),
-					sensorFeat=sensorCombinations[[loc_id]], loc_id=loc_id),
-
 		RunConf(model=SimpleMarkov(sensorData=df, sensors=sensorCombinations[[loc_id]]),
 					sensorFeat=sensorCombinations[[loc_id]], loc_id=loc_id),
-
-		RunConf(model=ConditionalMarkov(sensorData=df, sensors=sensorCombinations[[loc_id]]),
+		RunConf(model=SimpleMarkovUnsupervised(sensorData=df, sensors=sensorCombinations[[loc_id]]),
 					sensorFeat=sensorCombinations[[loc_id]], loc_id=loc_id)
 		)
 	return(l)
@@ -75,54 +72,23 @@ cat("Make predictions.\n")
 models <- lapply(models, function(m) {
 	m$trainingPred <- predictFromModel(m$model, newSensorData=dataPerRoomTrainingAug[[m$loc_id]])
 	m$validationPred <- predictFromModel(m$model, newSensorData=dataPerRoomValidationAug[[m$loc_id]])
-	m$unsupervisedPred <- predictUnsupervised(m$model, newSensorData=dataPerRoomEntireAug[[m$loc_id]])
 	
 	m$trainingMetrics <- lossMetrics(dataPerRoomTrainingAug[[m$loc_id]]$presence, m$trainingPred)
 	m$validationMetrics <- lossMetrics(dataPerRoomValidationAug[[m$loc_id]]$presence, m$validationPred)
-	m$unsupervisedMetrics <- lossMetrics(dataPerRoomEntireAug[[m$loc_id]]$presence, m$unsupervisedPred)
 	return(m)
 })
 
-#predMatrixTraining <- data.frame(dataset="training", extractCombine(models, "trainingPred", transpose=TRUE))
-#print(head(predMatrixTraining))
+lossMatrixTraining <- data.frame(dataset="Training", extractCombine(models, "trainingMetrics"))
+lossMatrixValidation <- data.frame(dataset="Validation", extractCombine(models, "validationMetrics"))
 
-lossMatrixTraining <- data.frame(dataset="training", extractCombine(models, "trainingMetrics"))
-lossMatrixValidation <- data.frame(dataset="validation", extractCombine(models, "validationMetrics"))
-lossMatrixUnsupervised <- data.frame(dataset="unsupervised", extractCombine(models, "unsupervisedMetrics"))
+lossMat <- rbind(lossMatrixTraining, lossMatrixValidation)
 
-print(lossMatrixValidation)
+plotLossEnergieInformatik(lossMat, filename="lossSupervisedUnsuperv.pdf")
 
-plotLossMatrixBEST(lossMatrixTraining, filename="lossMatTraining.pdf")
-plotLossMatrixBEST(lossMatrixValidation, filename="lossMatValidation.pdf")
-plotLossMatrixBEST(lossMatrixUnsupervised, filename="lossMatUnsupervised.pdf")
-
-cat("Plot time series.\n")
-# plot all time series
-lapply(models, function(m) {
-	plotTSforRC(	"t", m$loc_id,
-			class(m$model),
-			m$sensorFeat,
-			dataPerRoomTrainingAug[[m$loc_id]],
-			dataPerRoomTraining[[m$loc_id]],
-			m$trainingPred
-		   )
-	plotTSforRC(	"v", m$loc_id,
-			class(m$model),
-			m$sensorFeat,
-			dataPerRoomValidationAug[[m$loc_id]],
-			dataPerRoomValidation[[m$loc_id]],
-			m$validationPred
-		   )
-	plotTSforRC(	"u", m$loc_id,
-			class(m$model),
-			m$sensorFeat,
-			dataPerRoomEntireAug[[m$loc_id]],
-			dataPerRoomEntire[[m$loc_id]],
-			m$unsupervisedPred
-		   )		
-})
-
+plotLossMatrix(lossMatrixTraining, filename="lossMatTraining.pdf")
+plotLossMatrix(lossMatrixValidation, filename="lossMatValidation.pdf")
 
 
 cat("\n\ndone.\n")
+
 

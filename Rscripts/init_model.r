@@ -66,6 +66,49 @@ setMethod("predictUnsupervised", signature("Model", "data.frame"), function(obje
 })
 
 
+.SimpleMarkovUnsupervised <- setClass("SimpleMarkovUnsupervised", contains="Model")
+
+SimpleMarkovUnsupervised  <- function(sensorData=data.frame(), sensors=character(), ...) {
+	initV <- c(1/2,1/2)
+	pMat <- matrix(c(1/2,1/2,1/2,1/2),nrow=2)
+	v <- var(sensorData[, colnames(sensorData) %in% sensors])
+	#d <- diag(x=v) # create diagonal matrix
+	#colnames(d) <- names(v)
+	#rownames(d) <- names(v)
+	sigmaEstimate <- list(v, v)
+
+	varVec <- sqrt(diag(v))
+	#sigmaFactor <- 1
+	cM <- as.vector(colMeans(sensorData[, colnames(sensorData) %in% sensors]))
+	meanEstimate <- list(cM-varVec, cM+varVec)
+
+	b <- list(mu=meanEstimate,sigma=sigmaEstimate)
+	hmmmodel <- hmmspec(init=initV, trans=pMat, parms.emission=b, dens.emission=dmvnorm.hsmm)
+	#train <- simulate(hmmmodel, 10, seed = 123, rand.emis = rmvnorm.hsmm)
+	newDat <- sensorData[, colnames(sensorData) %in% sensors]
+	newDat <- as.matrix(newDat)
+	newDatL <- list(s=NA,x=newDat,N=nrow(newDat))
+	h1 <- hmmfit(newDatL,hmmmodel,mstep=mstep.mvnorm)
+	new("SimpleMarkovUnsupervised", Model(sensorData, sensors, h1), ...)
+}
+
+setMethod("predictFromModel", signature("SimpleMarkovUnsupervised", "data.frame"), function(object, newSensorData) {
+	newDat <- newSensorData[, colnames(newSensorData) %in% object@sensors]
+	newDat <- as.matrix(newDat)
+	newDatL <- list(s=NA,x=newDat,N=nrow(newDat))
+	prediction <- predict.hmm(object@internalModel,newdata=newDatL,method="viterbi")
+	predictionNormalized <- prediction$s -1
+	#predictionNormalized <- abs(prediction$s -2)
+	#print(unique(predictionNormalized))
+	# TODO: figure out mapping of states (note: they are not labelled). we need to label them. (seems correct at the moment)
+	return(predictionNormalized)	
+})
+
+
+
+
+
+
 .SimpleMarkov <- setClass("SimpleMarkov", contains="Model")
 
 SimpleMarkov  <- function(sensorData=data.frame(), sensors=character(), ...) {

@@ -1,5 +1,69 @@
 #!/usr/bin/env Rscript
 
+plotLossEnergieInformatik <- function(lossMat, filename) {
+	pdff(file=filename, width=7, height=5)
+	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+
+	#lM$alpha <- as.numeric(ifelse(lM$dataset == "training", 1.0, 0.5))
+	plt <- ggplot(data = lM, aes(y=value, x=variable, fill=model))
+
+	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
+	plt <- plt + facet_grid(dataset~loc_id)
+
+	plt <- plt + theme_bw()
+	plt <- plt + labs(y="Metric Score")
+	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
+
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.7, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank(), axis.text.x = element_text(hjust=1, vjust=0.5, angle=90) )
+
+	print(plt)
+	dev.off()
+}
+
+plotLossPaper2Nice <- function(lossMat, filename) {
+	pdff(file=filename, width=6, height=4)
+	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+	#lM$alpha <- as.numeric(ifelse(lM$dataset == "training", 1.0, 0.5))
+	plt <- ggplot(data = lM, aes(y=value, x=variable, fill=variable))
+
+	plt <- plt + geom_bar(aes(linetype=dataset), stat="identity", width=0.5, position = position_dodge(width = 0.61), color=NA, size=0.2)
+
+	plt <- plt + geom_bar(aes(alpha=dataset), stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2, fill="black")
+
+	plt <- plt + scale_alpha_manual(values = c("training" = 0, "unsupervised" = 0.84) ) 
+	plt <- plt + facet_grid(~loc_id)
+	plt <- plt + guides(fill="none", linetype="none", alpha = guide_legend(override.aes = list(fill="gray")))
+plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.text = element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.9, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank(), axis.text.x = element_text(hjust=1, vjust=0.5, angle=90) )
+	plt <- plt + labs(y="Metric Score")
+	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
+	print(plt)
+	dev.off()
+}
+
+plotLossPaper2 <- function(lossMat, filename) {
+	pdff(file=filename, width=5, height=3)
+	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+	#lM$alpha <- as.numeric(ifelse(lM$dataset == "training", 1.0, 0.5))
+	plt <- ggplot(data = lM, aes(y=value, x=variable, fill=variable))
+
+	plt <- plt + geom_bar(aes(linetype=dataset), stat="identity", width=0.5, position = position_dodge(width = 0.61), color=NA, size=0.2)
+
+	plt <- plt + geom_bar(aes(alpha=dataset), stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2, fill="black")
+
+	plt <- plt + scale_alpha_manual(values = c("training" = 0, "unsupervised" = 0.84) ) 
+	plt <- plt + facet_grid(~loc_id)
+	plt <- plt + guides(fill="none", linetype="none", alpha = guide_legend(override.aes = list(fill="gray")))
+	plt <- plt + theme_bw()
+	plt <- plt + theme(legend.position = "top", legend.title=element_blank(), axis.title.y = element_blank(),
+			axis.title.x = element_blank(),
+			strip.text.x = element_text(size=6),
+			strip.text.y = element_text(size=6),
+			axis.text.x = element_text(size=8, hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
+
 plotLossMatrixBEST <- function(lossMat, filename) {
 	pdff(file=filename, width=7, height=7)
 	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
