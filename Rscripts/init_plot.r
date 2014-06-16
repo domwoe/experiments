@@ -2,19 +2,28 @@
 
 plotLossEnergieInformatik <- function(lossMat, filename) {
 	pdff(file=filename, width=7, height=5)
-	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+	lossMat$model <- as.character(lossMat$model)
+	lossMat[lossMat$model=="SimpleMarkov", "model"] <- "supervised"
+	lossMat[lossMat$model=="SimpleMarkovUnsupervised", "model"] <- "unsupervised"
 
+	lossMat$loc_id <- as.character(lossMat$loc_id)
+	lossMat[lossMat$loc_id=="60", "loc_id"] <- "Bedroom 1"
+	lossMat[lossMat$loc_id=="61", "loc_id"] <- "Bathroom"
+	lossMat[lossMat$loc_id=="62", "loc_id"] <- "Bedroom 2"
+	lM <- melt(lossMat, id.vars=c("dataset",".id","model","loc_id","sensorFeat") )
+	lM$f1 <- ""
+	lM$f2 <- ""
 	#lM$alpha <- as.numeric(ifelse(lM$dataset == "training", 1.0, 0.5))
 	plt <- ggplot(data = lM, aes(y=value, x=variable, fill=model))
 
 	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
-	plt <- plt + facet_grid(dataset~loc_id)
+	plt <- plt + facet_grid(f1+dataset~loc_id+f2)
 
 	plt <- plt + theme_bw()
 	plt <- plt + labs(y="Metric Score")
 	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
 
-	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.7, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank(), axis.text.x = element_text(hjust=1, vjust=0.5, angle=90) )
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.background = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.7, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_blank(), axis.text.x = element_text(hjust=1, vjust=0.5, angle=90), strip.text = element_text(face = "bold") )
 
 	print(plt)
 	dev.off()
