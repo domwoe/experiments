@@ -4,7 +4,7 @@ source("init_init.r")
 Sys.setenv(ScriptName = thisFile())
 
 deltaTime <- 300 # in seconds
-features <- c("co2deriv", "avgCo2deriv", "co2", "avgCo2", "temperature", "co2deriv2", "humidity")
+features <- c("co2deriv", "avgCo2deriv", "co2", "avgCo2", "co2deriv2", "avgCo2deriv2", "temperature", "humidity")
 
 
 #ma <- function(x,n=5){as.vector(filter(x,rep(1/n,n), sides=2))}
@@ -64,6 +64,7 @@ dataAug <- ddply(allDataRaw, c("loc_id"), function(df) {
 		#print(filter(sensorDataTable$co2, rep(1,3)))
 		sensorDataTable$avgCo2 <- ma(sensorDataTable$co2)
 		sensorDataTable$avgCo2deriv <- ma(sensorDataTable$co2deriv)
+		sensorDataTable$avgCo2deriv2 <- ma(sensorDataTable$co2deriv2)
 		return(sensorDataTable)
 	})
 
@@ -77,7 +78,8 @@ args <- expand.grid(excludedQuant=c(0.00,0.02,0.04), nBins=c(20,30,50) )
 featureRanking <- mdply(args, getEntropyFeatureRanking, data=dataAug)
 plotFeatureRanking(featureRanking)
 
-
+featureRankingEI <- getEntropyFeatureRanking(data=dataAug, excludedQuant=0.02, nBins=30)
+plotFeatureRankingEI(featureRankingEI)
 
 
 plotHistOccupancy(allDataRaw)

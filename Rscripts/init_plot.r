@@ -1,5 +1,26 @@
 #!/usr/bin/env Rscript
 
+plotLossHor <- function(lossMat, filename) {
+	lossMat$loc_id <- as.character(lossMat$loc_id)
+	lossMat[lossMat$loc_id=="60", "loc_id"] <- "Bedroom 1"
+	lossMat[lossMat$loc_id=="61", "loc_id"] <- "Bathroom"
+	lossMat[lossMat$loc_id=="62", "loc_id"] <- "Bedroom 2"
+
+	pdff(file=filename, width=7, height=5)
+	lM <- melt(lossMat, id.vars=c("days",".id","model","loc_id","sensorFeat") )
+	lM$f1 <- ""
+	plt <- ggplot(data = lM, aes(y=value, x=days/2, color=variable))
+	plt <- plt + geom_line(size=1)
+	plt <- plt + geom_point(size=2)
+	plt <- plt + facet_grid(f1+loc_id~.)
+	plt <- plt + labs(y="Metric Score", x="Number of days considered for model fit")
+	#plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,1.0))
+	plt <- plt + theme_bw()
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(),  strip.text = element_text(face = "bold"), strip.background = element_blank(), panel.grid.major.x = element_line(colour = "darkgray"), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), axis.line = element_blank(), panel.grid.major.y = element_line(colour = "darkgray"), panel.margin=unit(0.9, "cm"), axis.title.y = element_text(vjust=0.25), axis.title.x = element_text(vjust=-0.5))
+	print(plt)
+	dev.off()
+}
+
 plotLossEnergieInformatik <- function(lossMat, filename) {
 	pdff(file=filename, width=7, height=5)
 	lossMat$model <- as.character(lossMat$model)
@@ -132,6 +153,30 @@ plotPrinCompAnalysis <- function(princompAnalysis) {
 	plt <- plt + scale_y_continuous(limits=c(-1,1))
 	plt <- plt + theme(legend.position = "top", axis.title.x = element_blank(),
 			axis.text.x = element_text(hjust=1, vjust=0.5, angle=90))
+	print(plt)
+	dev.off()
+}
+
+plotFeatureRankingEI <- function(featureRanking) {
+	featureRanking <- featureRanking[featureRanking$loc_id %in% c(60,61,62), ]
+	featureRanking$loc_id <- as.character(featureRanking$loc_id)
+	featureRanking[featureRanking$loc_id=="60", "loc_id"] <- "Bedroom 1"
+	featureRanking[featureRanking$loc_id=="61", "loc_id"] <- "Bathroom"
+	featureRanking[featureRanking$loc_id=="62", "loc_id"] <- "Bedroom 2"
+	featureRanking$f1 <- ""
+
+	pdff(file="featRankEI.pdf", width=6, height=5)
+	plt <- ggplot(data = featureRanking,
+			aes(y=relMutualInfo, x=sensor, fill=sensor))
+	plt <- plt + geom_bar(stat="identity", width=0.5, position = position_dodge(width = 0.61), color="black", size=0.2)
+	plt <- plt + facet_grid(f1+loc_id~.)
+	plt <- plt + coord_flip()
+	plt <- plt + guides(fill="none")
+	plt <- plt + theme_bw()
+	plt <- plt + labs(y="Relative Mutual Information", x=NULL)
+	plt <- plt + scale_y_continuous(expand = c(0,0), limits = c(0,0.6))
+	plt <- plt + theme(axis.ticks=element_blank(), legend.position = "top", legend.title=element_blank(), strip.background = element_blank(), panel.grid.minor.x = element_blank(), panel.background = element_blank(), panel.border = element_blank(), panel.grid.major.y = element_line(colour="darkgray"), panel.grid.major.x = element_line(colour = "darkgray"), panel.margin=unit(0.5, "cm"), axis.title.x = element_text(vjust=-0.5), strip.text = element_text(face = "bold") )
+
 	print(plt)
 	dev.off()
 }
